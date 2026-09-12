@@ -2,7 +2,7 @@
 
 Plataforma SaaS multi-tenant de turnos para barberías, con dashboard web para el administrador y un chatbot de WhatsApp para el cliente final.
 
-La especificación completa y vinculante del producto está en [`ESPECIFICACION-TECNICA.md`](./ESPECIFICACION-TECNICA.md). Ese documento es la única fuente de verdad — cualquier duda de comportamiento se resuelve ahí, no acá.
+La especificación completa y vinculante del producto vive en `ESPECIFICACION-TECNICA.md` en la raíz del proyecto (documento interno, no versionado en este repo). Ese documento es la única fuente de verdad — cualquier duda de comportamiento se resuelve ahí, no acá.
 
 ## Estructura del repo
 

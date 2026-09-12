@@ -35,3 +35,6 @@ logs/
 
 # Claude
 .claude/settings.local.json
+
+# Internal docs not meant to be published in the repo
+ESPECIFICACION-TECNICA.md
