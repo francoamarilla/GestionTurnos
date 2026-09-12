@@ -9,6 +9,7 @@ services:
       - "5433:5432"
     volumes:
       - postgres-data:/var/lib/postgresql/data
+      - ./postgres-init:/docker-entrypoint-initdb.d:ro
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U turnos -d turnos"]
       interval: 5s
@@ -20,8 +21,8 @@ services:
       context: ./backend
     environment:
       SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/turnos
-      SPRING_DATASOURCE_USERNAME: turnos
-      SPRING_DATASOURCE_PASSWORD: turnos
+      SPRING_DATASOURCE_USERNAME: turnos_app
+      SPRING_DATASOURCE_PASSWORD: turnos_app
       SUPERADMIN_EMAIL: ${SUPERADMIN_EMAIL:-}
       SUPERADMIN_PASSWORD: ${SUPERADMIN_PASSWORD:-}
     ports:

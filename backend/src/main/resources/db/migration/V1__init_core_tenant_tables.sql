@@ -1,6 +1,8 @@
--- Enables the GiST index support needed later for the appointment
--- non-overlap exclusion constraint (see spec section 4, rule 4).
-CREATE EXTENSION IF NOT EXISTS btree_gist;
+-- btree_gist (needed later for the appointment non-overlap exclusion
+-- constraint, spec section 4 rule 4) is created by postgres-init/init-app-role.sql
+-- as the bootstrap superuser, not here: creating extensions typically
+-- requires superuser privileges, and this migration runs as the restricted
+-- turnos_app role (see that file for why).
 
 CREATE TABLE tenant (
     id                         UUID PRIMARY KEY DEFAULT gen_random_uuid(),
