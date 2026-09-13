@@ -45,6 +45,7 @@ public class SecurityConfig {
                 .authorizeHttpRequests(auth -> auth
                         .requestMatchers(
                                 "/api/auth/login",
+                                "/api/webhooks/whatsapp",
                                 "/error",
                                 "/swagger-ui/**",
                                 "/v3/api-docs/**")

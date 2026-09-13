@@ -6,6 +6,7 @@ import com.turnos.tenancy.BranchSchedule;
 import com.turnos.tenancy.BranchScheduleRepository;
 import com.turnos.tenancy.Tenant;
 import com.turnos.tenancy.TenantRepository;
+import com.turnos.whatsapp.WhatsAppIntegrationRepository;
 import java.time.DayOfWeek;
 import java.util.EnumMap;
 import java.util.List;
@@ -22,14 +23,17 @@ public class EstablishmentService {
     private final TenantRepository tenantRepository;
     private final BranchRepository branchRepository;
     private final BranchScheduleRepository branchScheduleRepository;
+    private final WhatsAppIntegrationRepository whatsAppIntegrationRepository;
 
     public EstablishmentService(
             TenantRepository tenantRepository,
             BranchRepository branchRepository,
-            BranchScheduleRepository branchScheduleRepository) {
+            BranchScheduleRepository branchScheduleRepository,
+            WhatsAppIntegrationRepository whatsAppIntegrationRepository) {
         this.tenantRepository = tenantRepository;
         this.branchRepository = branchRepository;
         this.branchScheduleRepository = branchScheduleRepository;
+        this.whatsAppIntegrationRepository = whatsAppIntegrationRepository;
     }
 
     public EstablishmentResponse get(UUID tenantId) {
@@ -59,6 +63,16 @@ public class EstablishmentService {
         }
 
         return toResponse(tenant, branch);
+    }
+
+    // Onboarding/creation is intentionally not implemented (spec section 11:
+    // "contrato de alta pendiente del BSP") - not RLS-backed (see V8
+    // migration), so the tenantId filter here is the only isolation layer.
+    public WhatsAppIntegrationResponse getWhatsAppIntegration(UUID tenantId) {
+        return whatsAppIntegrationRepository
+                .findByTenantId(tenantId)
+                .map(WhatsAppIntegrationResponse::from)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "WhatsApp integration not configured"));
     }
 
     private void replaceSchedule(UUID branchId, List<DaySchedule> schedule) {

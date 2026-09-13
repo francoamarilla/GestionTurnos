@@ -32,4 +32,9 @@ public class EstablishmentController {
             @Valid @RequestBody UpdateEstablishmentRequest request) {
         return establishmentService.update(principal.tenantId(), request);
     }
+
+    @GetMapping("/whatsapp-integration")
+    public WhatsAppIntegrationResponse whatsAppIntegration(@AuthenticationPrincipal AuthenticatedPrincipal principal) {
+        return establishmentService.getWhatsAppIntegration(principal.tenantId());
+    }
 }
