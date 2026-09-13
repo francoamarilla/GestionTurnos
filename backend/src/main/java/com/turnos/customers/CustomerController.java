@@ -1,7 +1,10 @@
 package com.turnos.customers;
 
+import com.turnos.appointments.AppointmentResponse;
+import com.turnos.appointments.AppointmentService;
 import com.turnos.auth.AuthenticatedPrincipal;
 import jakarta.validation.Valid;
+import java.util.List;
 import java.util.UUID;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
@@ -23,9 +26,11 @@ import org.springframework.web.bind.annotation.RestController;
 public class CustomerController {
 
     private final CustomerService customerService;
+    private final AppointmentService appointmentService;
 
-    public CustomerController(CustomerService customerService) {
+    public CustomerController(CustomerService customerService, AppointmentService appointmentService) {
         this.customerService = customerService;
+        this.appointmentService = appointmentService;
     }
 
     @GetMapping
@@ -60,5 +65,11 @@ public class CustomerController {
     @ResponseStatus(HttpStatus.NO_CONTENT)
     public void delete(@AuthenticationPrincipal AuthenticatedPrincipal principal, @PathVariable UUID id) {
         customerService.deactivate(principal.tenantId(), id);
+    }
+
+    @GetMapping("/{id}/appointments")
+    public List<AppointmentResponse> appointments(
+            @AuthenticationPrincipal AuthenticatedPrincipal principal, @PathVariable UUID id) {
+        return appointmentService.findByCustomer(principal.tenantId(), id);
     }
 }

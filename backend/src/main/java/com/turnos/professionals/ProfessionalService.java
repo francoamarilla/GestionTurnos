@@ -1,10 +1,13 @@
 package com.turnos.professionals;
 
+import com.turnos.appointments.AppointmentRepository;
+import com.turnos.appointments.AppointmentStatus;
 import com.turnos.services.Service;
 import com.turnos.services.ServiceRepository;
 import com.turnos.tenancy.Branch;
 import com.turnos.tenancy.BranchRepository;
 import java.time.DayOfWeek;
+import java.time.Instant;
 import java.util.EnumMap;
 import java.util.List;
 import java.util.Map;
@@ -26,18 +29,21 @@ public class ProfessionalService {
     private final ProfessionalScheduleRepository professionalScheduleRepository;
     private final ProfessionalServiceAssignmentRepository professionalServiceAssignmentRepository;
     private final ServiceRepository serviceRepository;
+    private final AppointmentRepository appointmentRepository;
 
     public ProfessionalService(
             BranchRepository branchRepository,
             ProfessionalRepository professionalRepository,
             ProfessionalScheduleRepository professionalScheduleRepository,
             ProfessionalServiceAssignmentRepository professionalServiceAssignmentRepository,
-            ServiceRepository serviceRepository) {
+            ServiceRepository serviceRepository,
+            AppointmentRepository appointmentRepository) {
         this.branchRepository = branchRepository;
         this.professionalRepository = professionalRepository;
         this.professionalScheduleRepository = professionalScheduleRepository;
         this.professionalServiceAssignmentRepository = professionalServiceAssignmentRepository;
         this.serviceRepository = serviceRepository;
+        this.appointmentRepository = appointmentRepository;
     }
 
     public Page<ProfessionalResponse> findAll(UUID tenantId, Boolean active, Pageable pageable) {
@@ -73,10 +79,17 @@ public class ProfessionalService {
         return ProfessionalResponse.from(professionalRepository.save(professional));
     }
 
-    // Soft delete only (spec section 4, rule 21). The 409-if-pending-
-    // appointments guard (rule 15) is added once Appointment exists.
+    // Soft delete (spec section 4, rule 21) - blocked (rule 15) while there
+    // are unresolved future CONFIRMED appointments; the Admin must cancel or
+    // reassign them first.
     public void deactivate(UUID tenantId, UUID id) {
         Professional professional = getOwnedOrThrow(tenantId, id);
+        boolean hasPendingAppointments = appointmentRepository.existsByProfessionalIdAndStatusAndStartTimeAfter(
+                professional.getId(), AppointmentStatus.CONFIRMED, Instant.now());
+        if (hasPendingAppointments) {
+            throw new ResponseStatusException(
+                    HttpStatus.CONFLICT, "Professional has unresolved future confirmed appointments");
+        }
         professional.setActive(false);
         professionalRepository.save(professional);
     }

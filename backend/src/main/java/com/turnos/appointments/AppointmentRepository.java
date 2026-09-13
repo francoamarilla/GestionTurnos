@@ -27,4 +27,10 @@ public interface AppointmentRepository extends JpaRepository<Appointment, UUID> 
             @Param("to") Instant to,
             @Param("professionalId") UUID professionalId,
             @Param("status") AppointmentStatus status);
+
+    List<Appointment> findByCustomerIdOrderByStartTimeDesc(UUID customerId);
+
+    // Spec rule 15: deactivating a professional is blocked while they have
+    // unresolved future confirmed appointments.
+    boolean existsByProfessionalIdAndStatusAndStartTimeAfter(UUID professionalId, AppointmentStatus status, Instant after);
 }

@@ -201,6 +201,19 @@ public class AppointmentService {
         }
     }
 
+    public List<AppointmentResponse> findByCustomer(UUID tenantId, UUID customerId) {
+        ZoneId zone = ZoneId.of(getTenant(tenantId).getTimezone());
+        var customer = customerRepository
+                .findById(customerId)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Customer not found"));
+        if (!customer.getTenantId().equals(tenantId)) {
+            throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Customer not found");
+        }
+        return appointmentRepository.findByCustomerIdOrderByStartTimeDesc(customerId).stream()
+                .map(a -> AppointmentResponse.from(a, zone))
+                .toList();
+    }
+
     public List<AppointmentResponse> search(
             UUID tenantId, LocalDate from, LocalDate to, UUID professionalId, AppointmentStatus status) {
         Tenant tenant = getTenant(tenantId);
