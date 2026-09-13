@@ -1,6 +1,7 @@
 package com.turnos.appointments;
 
 import com.turnos.auth.AuthenticatedPrincipal;
+import com.turnos.reminders.CancellationNotifier;
 import jakarta.validation.Valid;
 import java.time.LocalDate;
 import java.util.List;
@@ -25,9 +26,11 @@ import org.springframework.web.bind.annotation.RestController;
 public class AppointmentController {
 
     private final AppointmentService appointmentService;
+    private final CancellationNotifier cancellationNotifier;
 
-    public AppointmentController(AppointmentService appointmentService) {
+    public AppointmentController(AppointmentService appointmentService, CancellationNotifier cancellationNotifier) {
         this.appointmentService = appointmentService;
+        this.cancellationNotifier = cancellationNotifier;
     }
 
     @GetMapping
@@ -58,7 +61,12 @@ public class AppointmentController {
             @AuthenticationPrincipal AuthenticatedPrincipal principal,
             @PathVariable UUID id,
             @Valid @RequestBody UpdateAppointmentStatusRequest request) {
-        return appointmentService.updateStatus(principal.tenantId(), principal.id(), id, request.status());
+        AppointmentResponse response =
+                appointmentService.updateStatus(principal.tenantId(), principal.id(), id, request.status());
+        if (request.status() == AppointmentStatus.CANCELLED) {
+            cancellationNotifier.notifyBusinessCancellation(principal.tenantId(), response);
+        }
+        return response;
     }
 
     @PostMapping("/{id}/reschedule")

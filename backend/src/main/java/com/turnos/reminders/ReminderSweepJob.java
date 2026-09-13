@@ -55,6 +55,11 @@ public class ReminderSweepJob {
                 log.error("Reminder sweep failed for tenant {}", tenantId, ex);
             }
         }
+        try {
+            reminderTenantSweeper.cleanupExpiredConversations();
+        } catch (RuntimeException ex) {
+            log.error("Bot conversation cleanup failed", ex);
+        }
     }
 
     // No flush() before reset() here, unlike ReminderTenantSweeper/

@@ -19,6 +19,7 @@ public class RecordingWhatsAppProvider implements WhatsAppProvider {
     private final List<String> texts = new ArrayList<>();
     private List<ListRow> lastRows = List.of();
     private List<Button> lastButtons = List.of();
+    private boolean failTemplateSends = false;
 
     @Override
     public void sendText(String fromPhoneNumberId, String toPhoneNumber, String text) {
@@ -28,7 +29,17 @@ public class RecordingWhatsAppProvider implements WhatsAppProvider {
     @Override
     public void sendTemplate(
             String fromPhoneNumberId, String toPhoneNumber, String templateName, List<String> parameters) {
+        if (failTemplateSends) {
+            throw new RuntimeException("Simulated WhatsApp send failure");
+        }
         texts.add(templateName);
+    }
+
+    // Lets reminder-retry tests simulate a BSP-side send failure without a
+    // real BSP - the interface itself never declares a checked exception,
+    // so any RuntimeException stands in for one.
+    public void failTemplateSends(boolean fail) {
+        this.failTemplateSends = fail;
     }
 
     @Override
@@ -60,5 +71,6 @@ public class RecordingWhatsAppProvider implements WhatsAppProvider {
         texts.clear();
         lastRows = List.of();
         lastButtons = List.of();
+        failTemplateSends = false;
     }
 }
