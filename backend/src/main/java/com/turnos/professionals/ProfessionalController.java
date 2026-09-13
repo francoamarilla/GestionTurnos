@@ -2,6 +2,7 @@ package com.turnos.professionals;
 
 import com.turnos.auth.AuthenticatedPrincipal;
 import jakarta.validation.Valid;
+import java.util.List;
 import java.util.UUID;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
@@ -62,5 +63,19 @@ public class ProfessionalController {
     @ResponseStatus(HttpStatus.NO_CONTENT)
     public void delete(@AuthenticationPrincipal AuthenticatedPrincipal principal, @PathVariable UUID id) {
         professionalService.deactivate(principal.tenantId(), id);
+    }
+
+    @GetMapping("/{id}/schedule")
+    public List<DaySchedule> getSchedule(
+            @AuthenticationPrincipal AuthenticatedPrincipal principal, @PathVariable UUID id) {
+        return professionalService.getSchedule(principal.tenantId(), id);
+    }
+
+    @PatchMapping("/{id}/schedule")
+    public List<DaySchedule> updateSchedule(
+            @AuthenticationPrincipal AuthenticatedPrincipal principal,
+            @PathVariable UUID id,
+            @RequestBody List<DaySchedule> schedule) {
+        return professionalService.updateSchedule(principal.tenantId(), id, schedule);
     }
 }

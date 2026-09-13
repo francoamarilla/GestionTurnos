@@ -2,6 +2,10 @@ package com.turnos.professionals;
 
 import com.turnos.tenancy.Branch;
 import com.turnos.tenancy.BranchRepository;
+import java.time.DayOfWeek;
+import java.util.EnumMap;
+import java.util.List;
+import java.util.Map;
 import java.util.UUID;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
@@ -17,10 +21,15 @@ public class ProfessionalService {
 
     private final BranchRepository branchRepository;
     private final ProfessionalRepository professionalRepository;
+    private final ProfessionalScheduleRepository professionalScheduleRepository;
 
-    public ProfessionalService(BranchRepository branchRepository, ProfessionalRepository professionalRepository) {
+    public ProfessionalService(
+            BranchRepository branchRepository,
+            ProfessionalRepository professionalRepository,
+            ProfessionalScheduleRepository professionalScheduleRepository) {
         this.branchRepository = branchRepository;
         this.professionalRepository = professionalRepository;
+        this.professionalScheduleRepository = professionalScheduleRepository;
     }
 
     public Page<ProfessionalResponse> findAll(UUID tenantId, Boolean active, Pageable pageable) {
@@ -62,6 +71,54 @@ public class ProfessionalService {
         Professional professional = getOwnedOrThrow(tenantId, id);
         professional.setActive(false);
         professionalRepository.save(professional);
+    }
+
+    public List<DaySchedule> getSchedule(UUID tenantId, UUID professionalId) {
+        Professional professional = getOwnedOrThrow(tenantId, professionalId);
+        Map<DayOfWeek, ProfessionalSchedule> byDay = new EnumMap<>(DayOfWeek.class);
+        for (ProfessionalSchedule s : professionalScheduleRepository.findByProfessionalId(professional.getId())) {
+            byDay.put(s.getDayOfWeek(), s);
+        }
+        return List.of(DayOfWeek.values()).stream()
+                .map(day -> {
+                    ProfessionalSchedule s = byDay.get(day);
+                    return s == null
+                            ? new DaySchedule(day, null, null, true)
+                            : new DaySchedule(day, s.getOpenTime(), s.getCloseTime(), s.isClosed());
+                })
+                .toList();
+    }
+
+    public List<DaySchedule> updateSchedule(UUID tenantId, UUID professionalId, List<DaySchedule> schedule) {
+        Professional professional = getOwnedOrThrow(tenantId, professionalId);
+
+        Map<DayOfWeek, DaySchedule> byDay = new EnumMap<>(DayOfWeek.class);
+        for (DaySchedule day : schedule) {
+            if (byDay.put(day.dayOfWeek(), day) != null) {
+                throw new ResponseStatusException(
+                        HttpStatus.BAD_REQUEST, "Duplicate day in schedule: " + day.dayOfWeek());
+            }
+            if (!day.closed() && (day.openTime() == null || day.closeTime() == null)) {
+                throw new ResponseStatusException(
+                        HttpStatus.BAD_REQUEST, "openTime/closeTime required when not closed: " + day.dayOfWeek());
+            }
+        }
+        if (byDay.size() != DayOfWeek.values().length) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Schedule must include all 7 days of the week");
+        }
+
+        professionalScheduleRepository.deleteByProfessionalId(professional.getId());
+        professionalScheduleRepository.flush();
+        for (DaySchedule day : schedule) {
+            ProfessionalSchedule entity = new ProfessionalSchedule();
+            entity.setProfessionalId(professional.getId());
+            entity.setDayOfWeek(day.dayOfWeek());
+            entity.setClosed(day.closed());
+            entity.setOpenTime(day.closed() ? null : day.openTime());
+            entity.setCloseTime(day.closed() ? null : day.closeTime());
+            professionalScheduleRepository.save(entity);
+        }
+        return getSchedule(tenantId, professionalId);
     }
 
     private Professional getOwnedOrThrow(UUID tenantId, UUID id) {
