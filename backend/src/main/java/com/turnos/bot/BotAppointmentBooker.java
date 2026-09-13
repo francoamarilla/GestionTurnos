@@ -3,6 +3,7 @@ package com.turnos.bot;
 import com.turnos.appointments.AppointmentResponse;
 import com.turnos.appointments.AppointmentService;
 import com.turnos.appointments.CreateAppointmentRequest;
+import com.turnos.appointments.RescheduleAppointmentRequest;
 import com.turnos.tenancy.TenantSessionContext;
 import java.util.UUID;
 import org.springframework.transaction.annotation.Propagation;
@@ -43,8 +44,18 @@ class BotAppointmentBooker {
     // connection going back to the pool are harmless: every caller applies
     // its own tenant context before touching an RLS-protected table anyway.
     @Transactional(propagation = Propagation.REQUIRES_NEW)
-    AppointmentResponse attempt(UUID tenantId, CreateAppointmentRequest request) {
+    AppointmentResponse attemptCreate(UUID tenantId, CreateAppointmentRequest request) {
         tenantSessionContext.apply(false, tenantId);
         return appointmentService.create(tenantId, request);
+    }
+
+    // Same isolation need as attemptCreate: rescheduleAsCustomer ends in the
+    // same createInternal() -> exclusion constraint path, so a losing race
+    // for the *new* slot has the identical abort-the-transaction problem.
+    @Transactional(propagation = Propagation.REQUIRES_NEW)
+    AppointmentResponse attemptReschedule(
+            UUID tenantId, UUID customerId, UUID appointmentId, RescheduleAppointmentRequest request) {
+        tenantSessionContext.apply(false, tenantId);
+        return appointmentService.rescheduleAsCustomer(tenantId, customerId, appointmentId, request);
     }
 }

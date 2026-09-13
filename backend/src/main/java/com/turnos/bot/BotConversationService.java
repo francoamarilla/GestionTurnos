@@ -4,6 +4,7 @@ import com.turnos.appointments.AppointmentResponse;
 import com.turnos.appointments.AppointmentService;
 import com.turnos.appointments.AppointmentStatus;
 import com.turnos.appointments.CreateAppointmentRequest;
+import com.turnos.appointments.RescheduleAppointmentRequest;
 import com.turnos.customers.Customer;
 import com.turnos.customers.CustomerRepository;
 import com.turnos.customers.CustomerService;
@@ -43,10 +44,6 @@ import org.springframework.web.server.ResponseStatusException;
 // (spec section 13). WhatsAppWebhookController will build an InboundMessage
 // from a real payload and call handleMessage() once a BSP is picked.
 //
-// VIEWING_APPOINTMENTS currently only *shows* the customer's upcoming
-// appointments; matching a specific one to cancel/reschedule lands in the
-// next commit (spec section 5's view/cancel/reschedule flow) - until then,
-// any reply while in that step is handled as unmatched input.
 @org.springframework.stereotype.Service
 public class BotConversationService {
 
@@ -59,6 +56,10 @@ public class BotConversationService {
     private static final String PROFESSIONAL_SELECTION_KEY = "professionalSelection";
     private static final String PROFESSIONAL_ID_KEY = "professionalId";
     private static final String SLOT_START_KEY = "slotStart";
+    private static final String MODE_KEY = "mode";
+    private static final String MODE_BOOK = "BOOK";
+    private static final String MODE_RESCHEDULE = "RESCHEDULE";
+    private static final String RESCHEDULE_APPOINTMENT_ID_KEY = "rescheduleAppointmentId";
     private static final String ROOT_MENU_PROMPT = "¡Hola! 👋 ¿Qué querés hacer?";
 
     private static final String OPTION_BOOK = "BOOK";
@@ -68,6 +69,8 @@ public class BotConversationService {
     private static final String OPTION_ANY_PROFESSIONAL = "ANY";
     private static final String OPTION_CONFIRM_BOOKING = "CONFIRM_BOOKING";
     private static final String OPTION_CANCEL_BOOKING = "CANCEL_BOOKING";
+    private static final String OPTION_CANCEL_APPOINTMENT = "CANCEL_APPT";
+    private static final String OPTION_RESCHEDULE_APPOINTMENT = "RESCHEDULE_APPT";
 
     // Generous enough that "expand the range" (spec section 5's no-
     // availability handling) rarely needs its own extra round trip; capped
@@ -177,6 +180,8 @@ public class BotConversationService {
                 handleProfessionalSelection(tenantId, businessNumber, phone, state, message);
             case BOOKING_SELECT_SLOT -> handleSlotSelection(tenantId, businessNumber, phone, state, message);
             case BOOKING_CONFIRM -> handleBookingConfirmation(tenantId, businessNumber, phone, state, message);
+            case VIEWING_APPOINTMENTS -> handleAppointmentSelection(tenantId, businessNumber, phone, state, message);
+            case APPOINTMENT_ACTION -> handleAppointmentAction(tenantId, businessNumber, phone, state, message);
             case HUMAN_HANDOFF -> botConversationStateRepository.save(state);
             default -> handleUnmatchedInput(tenantId, businessNumber, phone, state);
         }
@@ -212,6 +217,7 @@ public class BotConversationService {
     }
 
     private void startBooking(UUID tenantId, String businessNumber, String phone, BotConversationState state) {
+        state.getCollectedData().put(MODE_KEY, MODE_BOOK);
         state.setCurrentStep(BotStep.BOOKING_SELECT_SERVICE);
         resetFailures(state);
         botConversationStateRepository.save(state);
@@ -343,11 +349,13 @@ public class BotConversationService {
         Service service = serviceRepository.findById(serviceId).orElseThrow();
         Professional professional = professionalRepository.findById(professionalId).orElseThrow();
 
+        boolean rescheduling = MODE_RESCHEDULE.equals(state.getCollectedData().get(MODE_KEY));
+
         StringBuilder text = new StringBuilder();
-        if (hasSameDayConfirmedAppointment(tenantId, phone, slotStart)) {
+        if (!rescheduling && hasSameDayConfirmedAppointment(tenantId, phone, slotStart)) {
             text.append("Ojo: ya tenés otro turno confirmado ese mismo día.\n");
         }
-        text.append("¿Confirmás este turno?\n")
+        text.append(rescheduling ? "¿Confirmás la reprogramación?\n" : "¿Confirmás este turno?\n")
                 .append(service.getName())
                 .append(" con ")
                 .append(professional.getName())
@@ -368,10 +376,12 @@ public class BotConversationService {
     private void handleBookingConfirmation(
             UUID tenantId, String businessNumber, String phone, BotConversationState state, InboundMessage message) {
         String selectionId = message.selectionId();
+        boolean rescheduling = MODE_RESCHEDULE.equals(state.getCollectedData().get(MODE_KEY));
         if (OPTION_CANCEL_BOOKING.equals(selectionId)) {
             state.setCurrentStep(BotStep.ROOT_MENU);
             botConversationStateRepository.save(state);
-            whatsAppProvider.sendText(businessNumber, phone, "Sin problema, no reservé nada.");
+            whatsAppProvider.sendText(
+                    businessNumber, phone, rescheduling ? "Sin problema, dejé tu turno como estaba." : "Sin problema, no reservé nada.");
             showRootMenu(businessNumber, phone);
             return;
         }
@@ -387,8 +397,17 @@ public class BotConversationService {
         UUID customerId = customer == null ? null : customer.getId();
 
         try {
-            botAppointmentBooker.attempt(
-                    tenantId, new CreateAppointmentRequest(professionalId, serviceId, slotStart, customerId));
+            if (rescheduling) {
+                UUID appointmentId = UUID.fromString(state.getCollectedData().get(RESCHEDULE_APPOINTMENT_ID_KEY));
+                botAppointmentBooker.attemptReschedule(
+                        tenantId,
+                        customerId,
+                        appointmentId,
+                        new RescheduleAppointmentRequest(slotStart, professionalId, serviceId));
+            } else {
+                botAppointmentBooker.attemptCreate(
+                        tenantId, new CreateAppointmentRequest(professionalId, serviceId, slotStart, customerId));
+            }
         } catch (ResponseStatusException ex) {
             if (ex.getStatusCode() == HttpStatus.CONFLICT) {
                 // Someone else took it in the interim (spec section 5, step 5)
@@ -404,7 +423,8 @@ public class BotConversationService {
         }
         state.setCurrentStep(BotStep.ROOT_MENU);
         botConversationStateRepository.save(state);
-        whatsAppProvider.sendText(businessNumber, phone, "¡Listo! Tu turno quedó confirmado. ✅");
+        whatsAppProvider.sendText(
+                businessNumber, phone, rescheduling ? "¡Listo! Tu turno quedó reprogramado. ✅" : "¡Listo! Tu turno quedó confirmado. ✅");
     }
 
     private record SlotOption(String rowId, String label, UUID professionalId, OffsetDateTime startTime) {}
@@ -482,38 +502,117 @@ public class BotConversationService {
         sendAppointmentList(tenantId, businessNumber, phone);
     }
 
-    private void sendAppointmentList(UUID tenantId, String businessNumber, String phone) {
+    private List<AppointmentResponse> upcomingConfirmedAppointments(UUID tenantId, String phone) {
         Customer customer = customerRepository.findByTenantIdAndPhone(tenantId, phone).orElse(null);
-        List<AppointmentResponse> upcoming = customer == null
-                ? List.of()
-                : appointmentService.findByCustomer(tenantId, customer.getId()).stream()
-                        .filter(a -> a.status() == AppointmentStatus.CONFIRMED
-                                && a.startTime().toInstant().isAfter(Instant.now()))
-                        .toList();
+        if (customer == null) {
+            return List.of();
+        }
+        return appointmentService.findByCustomer(tenantId, customer.getId()).stream()
+                .filter(a -> a.status() == AppointmentStatus.CONFIRMED
+                        && a.startTime().toInstant().isAfter(Instant.now()))
+                .toList();
+    }
+
+    private String describeAppointment(AppointmentResponse appointment) {
+        String serviceName =
+                serviceRepository.findById(appointment.serviceId()).map(Service::getName).orElse("Servicio");
+        String professionalName = professionalRepository
+                .findById(appointment.professionalId())
+                .map(Professional::getName)
+                .orElse("Profesional");
+        return serviceName + " con " + professionalName + " el " + appointment.startTime().format(DISPLAY_FORMAT);
+    }
+
+    private void sendAppointmentList(UUID tenantId, String businessNumber, String phone) {
+        List<AppointmentResponse> upcoming = upcomingConfirmedAppointments(tenantId, phone);
         if (upcoming.isEmpty()) {
             whatsAppProvider.sendText(
                     businessNumber, phone, "No tenés turnos próximos. Escribinos \"reservar\" para sacar uno.");
             return;
         }
-        StringBuilder text = new StringBuilder("Estos son tus próximos turnos:\n");
-        for (AppointmentResponse appointment : upcoming) {
-            String serviceName = serviceRepository
-                    .findById(appointment.serviceId())
-                    .map(Service::getName)
-                    .orElse("Servicio");
-            String professionalName = professionalRepository
-                    .findById(appointment.professionalId())
-                    .map(Professional::getName)
-                    .orElse("Profesional");
-            text.append("- ")
-                    .append(serviceName)
-                    .append(" con ")
-                    .append(professionalName)
-                    .append(" el ")
-                    .append(appointment.startTime().format(DISPLAY_FORMAT))
-                    .append('\n');
+        List<WhatsAppProvider.ListRow> rows = upcoming.stream()
+                .map(a -> new WhatsAppProvider.ListRow(a.id().toString(), describeAppointment(a), null))
+                .toList();
+        whatsAppProvider.sendList(businessNumber, phone, "¿Cuál de tus turnos querés ver?", "Ver turnos", rows);
+    }
+
+    private void handleAppointmentSelection(
+            UUID tenantId, String businessNumber, String phone, BotConversationState state, InboundMessage message) {
+        UUID appointmentId = parseUuidOrNull(message.selectionId());
+        boolean owned = appointmentId != null
+                && upcomingConfirmedAppointments(tenantId, phone).stream()
+                        .anyMatch(a -> a.id().equals(appointmentId));
+        if (!owned) {
+            handleUnmatchedInput(tenantId, businessNumber, phone, state);
+            return;
         }
-        whatsAppProvider.sendText(businessNumber, phone, text.toString());
+        state.getCollectedData().put(RESCHEDULE_APPOINTMENT_ID_KEY, appointmentId.toString());
+        state.setCurrentStep(BotStep.APPOINTMENT_ACTION);
+        resetFailures(state);
+        botConversationStateRepository.save(state);
+        sendAppointmentActionPrompt(businessNumber, phone);
+    }
+
+    private void sendAppointmentActionPrompt(String businessNumber, String phone) {
+        whatsAppProvider.sendButtons(
+                businessNumber,
+                phone,
+                "¿Qué querés hacer con ese turno?",
+                List.of(
+                        new WhatsAppProvider.Button(OPTION_CANCEL_APPOINTMENT, "Cancelar"),
+                        new WhatsAppProvider.Button(OPTION_RESCHEDULE_APPOINTMENT, "Reprogramar")));
+    }
+
+    private void handleAppointmentAction(
+            UUID tenantId, String businessNumber, String phone, BotConversationState state, InboundMessage message) {
+        String selectionId = message.selectionId();
+        UUID appointmentId = UUID.fromString(state.getCollectedData().get(RESCHEDULE_APPOINTMENT_ID_KEY));
+        Customer customer = customerRepository.findByTenantIdAndPhone(tenantId, phone).orElse(null);
+        UUID customerId = customer == null ? null : customer.getId();
+
+        if (OPTION_CANCEL_APPOINTMENT.equals(selectionId)) {
+            try {
+                appointmentService.cancelAsCustomer(tenantId, customerId, appointmentId);
+            } catch (ResponseStatusException ex) {
+                if (ex.getStatusCode() == HttpStatus.CONFLICT) {
+                    // Outside the cancellation window (spec rule 12): never a
+                    // flat refusal - explain the policy and the human option
+                    // is right there on the root menu we show next.
+                    whatsAppProvider.sendText(
+                            businessNumber,
+                            phone,
+                            "Ese turno ya está dentro de la ventana en la que no se puede cancelar o reprogramar solo. "
+                                    + "Si necesitás ayuda, elegí \"Hablar con alguien del local\".");
+                    state.setCurrentStep(BotStep.ROOT_MENU);
+                    botConversationStateRepository.save(state);
+                    showRootMenu(businessNumber, phone);
+                    return;
+                }
+                throw ex;
+            }
+            state.setCurrentStep(BotStep.ROOT_MENU);
+            botConversationStateRepository.save(state);
+            whatsAppProvider.sendText(businessNumber, phone, "Listo, cancelé ese turno. ✅");
+            showRootMenu(businessNumber, phone);
+            return;
+        }
+
+        if (OPTION_RESCHEDULE_APPOINTMENT.equals(selectionId)) {
+            AppointmentResponse original = appointmentService.findById(tenantId, appointmentId);
+            state.getCollectedData().put(MODE_KEY, MODE_RESCHEDULE);
+            state.getCollectedData().put(SERVICE_ID_KEY, original.serviceId().toString());
+            // Same professional by default (spec section 5); changing it is
+            // out of scope here - the customer can always fall back to
+            // "Hablar con alguien" if they need a different one.
+            state.getCollectedData().put(PROFESSIONAL_SELECTION_KEY, original.professionalId().toString());
+            state.setCurrentStep(BotStep.BOOKING_SELECT_SLOT);
+            resetFailures(state);
+            botConversationStateRepository.save(state);
+            sendSlotList(tenantId, businessNumber, phone, state);
+            return;
+        }
+
+        handleUnmatchedInput(tenantId, businessNumber, phone, state);
     }
 
     private void startHumanHandoff(String businessNumber, String phone, BotConversationState state) {
@@ -543,6 +642,7 @@ public class BotConversationService {
             case BOOKING_SELECT_SLOT -> sendSlotList(tenantId, businessNumber, phone, state);
             case BOOKING_CONFIRM -> sendBookingConfirmation(tenantId, businessNumber, phone, state);
             case VIEWING_APPOINTMENTS -> sendAppointmentList(tenantId, businessNumber, phone);
+            case APPOINTMENT_ACTION -> sendAppointmentActionPrompt(businessNumber, phone);
             default -> showRootMenu(businessNumber, phone);
         }
     }
