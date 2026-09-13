@@ -33,4 +33,10 @@ public interface AppointmentRepository extends JpaRepository<Appointment, UUID> 
     // Spec rule 15: deactivating a professional is blocked while they have
     // unresolved future confirmed appointments.
     boolean existsByProfessionalIdAndStatusAndStartTimeAfter(UUID professionalId, AppointmentStatus status, Instant after);
+
+    // Used to classify a customer as new vs returning (spec section 7): their
+    // first-ever COMPLETED appointment, regardless of period.
+    @Query("SELECT MIN(a.startTime) FROM Appointment a WHERE a.customerId = :customerId AND a.status = :status")
+    Instant findEarliestStartTimeByCustomerIdAndStatus(
+            @Param("customerId") UUID customerId, @Param("status") AppointmentStatus status);
 }
