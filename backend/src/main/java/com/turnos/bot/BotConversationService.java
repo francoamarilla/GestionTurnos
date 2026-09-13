@@ -3,28 +3,39 @@ package com.turnos.bot;
 import com.turnos.appointments.AppointmentResponse;
 import com.turnos.appointments.AppointmentService;
 import com.turnos.appointments.AppointmentStatus;
+import com.turnos.appointments.CreateAppointmentRequest;
 import com.turnos.customers.Customer;
 import com.turnos.customers.CustomerRepository;
 import com.turnos.customers.CustomerService;
 import com.turnos.customers.CreateCustomerRequest;
 import com.turnos.professionals.Professional;
 import com.turnos.professionals.ProfessionalRepository;
+import com.turnos.professionals.ProfessionalServiceAssignment;
+import com.turnos.professionals.ProfessionalServiceAssignmentRepository;
 import com.turnos.services.Service;
 import com.turnos.services.ServiceRepository;
+import com.turnos.tenancy.TenantRepository;
 import com.turnos.tenancy.TenantSessionContext;
 import com.turnos.whatsapp.WhatsAppIntegration;
 import com.turnos.whatsapp.WhatsAppIntegrationRepository;
 import com.turnos.whatsapp.WhatsAppProvider;
 import java.time.Duration;
 import java.time.Instant;
+import java.time.LocalDate;
+import java.time.OffsetDateTime;
+import java.time.ZoneId;
 import java.time.format.DateTimeFormatter;
+import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.UUID;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.http.HttpStatus;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.web.server.ResponseStatusException;
 
 // The deterministic, button/list-driven bot engine (spec section 5 - no
 // NLU/LLM). Works purely against InboundMessage, never the raw webhook
@@ -32,12 +43,10 @@ import org.springframework.transaction.annotation.Transactional;
 // (spec section 13). WhatsAppWebhookController will build an InboundMessage
 // from a real payload and call handleMessage() once a BSP is picked.
 //
-// BOOKING_SELECT_SERVICE and VIEWING_APPOINTMENTS currently only *show*
-// their step's options (service list / upcoming appointments); matching a
-// specific selection within those steps lands in the next commits (spec
-// section 5's booking and view/cancel/reschedule flows) - until then, any
-// reply while in those steps is handled as unmatched input, same as
-// anything unrecognized at the root menu.
+// VIEWING_APPOINTMENTS currently only *shows* the customer's upcoming
+// appointments; matching a specific one to cancel/reschedule lands in the
+// next commit (spec section 5's view/cancel/reschedule flow) - until then,
+// any reply while in that step is handled as unmatched input.
 @org.springframework.stereotype.Service
 public class BotConversationService {
 
@@ -46,43 +55,68 @@ public class BotConversationService {
     private static final Duration SESSION_TIMEOUT = Duration.ofMinutes(30);
     private static final int MAX_CONSECUTIVE_FAILURES = 3;
     private static final String FAILURES_KEY = "failures";
+    private static final String SERVICE_ID_KEY = "serviceId";
+    private static final String PROFESSIONAL_SELECTION_KEY = "professionalSelection";
+    private static final String PROFESSIONAL_ID_KEY = "professionalId";
+    private static final String SLOT_START_KEY = "slotStart";
     private static final String ROOT_MENU_PROMPT = "¡Hola! 👋 ¿Qué querés hacer?";
 
     private static final String OPTION_BOOK = "BOOK";
     private static final String OPTION_VIEW = "VIEW";
     private static final String OPTION_CANCEL = "CANCEL";
     private static final String OPTION_HUMAN = "HUMAN";
+    private static final String OPTION_ANY_PROFESSIONAL = "ANY";
+    private static final String OPTION_CONFIRM_BOOKING = "CONFIRM_BOOKING";
+    private static final String OPTION_CANCEL_BOOKING = "CANCEL_BOOKING";
+
+    // Generous enough that "expand the range" (spec section 5's no-
+    // availability handling) rarely needs its own extra round trip; capped
+    // to a WhatsApp interactive list's practical row limit.
+    private static final int BOOKING_SEARCH_DAYS = 14;
+    private static final int MAX_SLOT_OPTIONS = 8;
 
     private static final DateTimeFormatter DISPLAY_FORMAT = DateTimeFormatter.ofPattern("dd/MM HH:mm");
 
     private final WhatsAppIntegrationRepository whatsAppIntegrationRepository;
     private final BotConversationStateRepository botConversationStateRepository;
     private final TenantSessionContext tenantSessionContext;
+    private final TenantRepository tenantRepository;
     private final CustomerRepository customerRepository;
     private final CustomerService customerService;
     private final ServiceRepository serviceRepository;
     private final ProfessionalRepository professionalRepository;
+    private final ProfessionalServiceAssignmentRepository professionalServiceAssignmentRepository;
     private final AppointmentService appointmentService;
+    private final BotAppointmentBooker botAppointmentBooker;
+    private final com.turnos.availability.AvailabilityService availabilityService;
     private final WhatsAppProvider whatsAppProvider;
 
     public BotConversationService(
             WhatsAppIntegrationRepository whatsAppIntegrationRepository,
             BotConversationStateRepository botConversationStateRepository,
             TenantSessionContext tenantSessionContext,
+            TenantRepository tenantRepository,
             CustomerRepository customerRepository,
             CustomerService customerService,
             ServiceRepository serviceRepository,
             ProfessionalRepository professionalRepository,
+            ProfessionalServiceAssignmentRepository professionalServiceAssignmentRepository,
             AppointmentService appointmentService,
+            BotAppointmentBooker botAppointmentBooker,
+            com.turnos.availability.AvailabilityService availabilityService,
             WhatsAppProvider whatsAppProvider) {
         this.whatsAppIntegrationRepository = whatsAppIntegrationRepository;
         this.botConversationStateRepository = botConversationStateRepository;
         this.tenantSessionContext = tenantSessionContext;
+        this.tenantRepository = tenantRepository;
         this.customerRepository = customerRepository;
         this.customerService = customerService;
         this.serviceRepository = serviceRepository;
         this.professionalRepository = professionalRepository;
+        this.professionalServiceAssignmentRepository = professionalServiceAssignmentRepository;
         this.appointmentService = appointmentService;
+        this.botAppointmentBooker = botAppointmentBooker;
+        this.availabilityService = availabilityService;
         this.whatsAppProvider = whatsAppProvider;
     }
 
@@ -138,6 +172,11 @@ public class BotConversationService {
         switch (state.getCurrentStep()) {
             case AWAITING_NAME -> handleNameCapture(tenantId, businessNumber, phone, state, message);
             case ROOT_MENU -> handleRootMenuSelection(tenantId, businessNumber, phone, state, message);
+            case BOOKING_SELECT_SERVICE -> handleServiceSelection(tenantId, businessNumber, phone, state, message);
+            case BOOKING_SELECT_PROFESSIONAL ->
+                handleProfessionalSelection(tenantId, businessNumber, phone, state, message);
+            case BOOKING_SELECT_SLOT -> handleSlotSelection(tenantId, businessNumber, phone, state, message);
+            case BOOKING_CONFIRM -> handleBookingConfirmation(tenantId, businessNumber, phone, state, message);
             case HUMAN_HANDOFF -> botConversationStateRepository.save(state);
             default -> handleUnmatchedInput(tenantId, businessNumber, phone, state);
         }
@@ -192,6 +231,247 @@ public class BotConversationService {
                         s.getId().toString(), s.getName(), s.getDurationMinutes() + " min - $" + s.getPrice()))
                 .toList();
         whatsAppProvider.sendList(businessNumber, phone, "¿Qué servicio querés reservar?", "Ver servicios", rows);
+    }
+
+    private void handleServiceSelection(
+            UUID tenantId, String businessNumber, String phone, BotConversationState state, InboundMessage message) {
+        UUID serviceId = parseUuidOrNull(message.selectionId());
+        Service service = serviceId == null ? null : serviceRepository.findById(serviceId).orElse(null);
+        if (service == null || !service.isActive() || !service.getTenantId().equals(tenantId)) {
+            handleUnmatchedInput(tenantId, businessNumber, phone, state);
+            return;
+        }
+        state.getCollectedData().put(SERVICE_ID_KEY, service.getId().toString());
+        state.setCurrentStep(BotStep.BOOKING_SELECT_PROFESSIONAL);
+        resetFailures(state);
+        botConversationStateRepository.save(state);
+        sendProfessionalList(businessNumber, phone, service.getId());
+    }
+
+    private void sendProfessionalList(String businessNumber, String phone, UUID serviceId) {
+        List<Professional> professionals = eligibleProfessionals(serviceId);
+        List<WhatsAppProvider.ListRow> rows = new ArrayList<>();
+        rows.add(new WhatsAppProvider.ListRow(OPTION_ANY_PROFESSIONAL, "Cualquiera disponible", null));
+        for (Professional professional : professionals) {
+            rows.add(new WhatsAppProvider.ListRow(professional.getId().toString(), professional.getName(), null));
+        }
+        whatsAppProvider.sendList(businessNumber, phone, "¿Con quién preferís el turno?", "Ver profesionales", rows);
+    }
+
+    private void handleProfessionalSelection(
+            UUID tenantId, String businessNumber, String phone, BotConversationState state, InboundMessage message) {
+        String selectionId = message.selectionId();
+        UUID serviceId = UUID.fromString(state.getCollectedData().get(SERVICE_ID_KEY));
+        String professionalSelection;
+        if (OPTION_ANY_PROFESSIONAL.equals(selectionId)) {
+            professionalSelection = OPTION_ANY_PROFESSIONAL;
+        } else {
+            UUID candidate = parseUuidOrNull(selectionId);
+            boolean offersService = candidate != null
+                    && eligibleProfessionals(serviceId).stream().anyMatch(p -> p.getId().equals(candidate));
+            if (!offersService) {
+                handleUnmatchedInput(tenantId, businessNumber, phone, state);
+                return;
+            }
+            professionalSelection = candidate.toString();
+        }
+        state.getCollectedData().put(PROFESSIONAL_SELECTION_KEY, professionalSelection);
+        state.setCurrentStep(BotStep.BOOKING_SELECT_SLOT);
+        resetFailures(state);
+        botConversationStateRepository.save(state);
+        sendSlotList(tenantId, businessNumber, phone, state);
+    }
+
+    private void sendSlotList(UUID tenantId, String businessNumber, String phone, BotConversationState state) {
+        UUID serviceId = UUID.fromString(state.getCollectedData().get(SERVICE_ID_KEY));
+        String professionalSelection = state.getCollectedData().get(PROFESSIONAL_SELECTION_KEY);
+        List<SlotOption> slots = findSlots(tenantId, serviceId, professionalSelection);
+        if (slots.isEmpty()) {
+            if (!OPTION_ANY_PROFESSIONAL.equals(professionalSelection)) {
+                whatsAppProvider.sendButtons(
+                        businessNumber,
+                        phone,
+                        "No encontré horarios disponibles con ese profesional en los próximos días.",
+                        List.of(
+                                new WhatsAppProvider.Button(OPTION_ANY_PROFESSIONAL, "Probar cualquiera disponible"),
+                                new WhatsAppProvider.Button(OPTION_HUMAN, "Hablar con alguien")));
+                return;
+            }
+            whatsAppProvider.sendText(
+                    businessNumber,
+                    phone,
+                    "No hay horarios disponibles en los próximos días. Te derivo con alguien del local.");
+            startHumanHandoff(businessNumber, phone, state);
+            return;
+        }
+        List<WhatsAppProvider.ListRow> rows =
+                slots.stream().map(s -> new WhatsAppProvider.ListRow(s.rowId(), s.label(), null)).toList();
+        whatsAppProvider.sendList(
+                businessNumber, phone, "Estos son los próximos horarios disponibles:", "Ver horarios", rows);
+    }
+
+    private void handleSlotSelection(
+            UUID tenantId, String businessNumber, String phone, BotConversationState state, InboundMessage message) {
+        String selectionId = message.selectionId();
+        if (OPTION_HUMAN.equals(selectionId)) {
+            startHumanHandoff(businessNumber, phone, state);
+            return;
+        }
+        if (OPTION_ANY_PROFESSIONAL.equals(selectionId)) {
+            state.getCollectedData().put(PROFESSIONAL_SELECTION_KEY, OPTION_ANY_PROFESSIONAL);
+            botConversationStateRepository.save(state);
+            sendSlotList(tenantId, businessNumber, phone, state);
+            return;
+        }
+        SlotOption chosen = selectionId == null ? null : parseSlotSelection(selectionId);
+        if (chosen == null) {
+            handleUnmatchedInput(tenantId, businessNumber, phone, state);
+            return;
+        }
+        state.getCollectedData().put(PROFESSIONAL_ID_KEY, chosen.professionalId().toString());
+        state.getCollectedData().put(SLOT_START_KEY, chosen.startTime().toString());
+        state.setCurrentStep(BotStep.BOOKING_CONFIRM);
+        resetFailures(state);
+        botConversationStateRepository.save(state);
+        sendBookingConfirmation(tenantId, businessNumber, phone, state);
+    }
+
+    private void sendBookingConfirmation(UUID tenantId, String businessNumber, String phone, BotConversationState state) {
+        UUID serviceId = UUID.fromString(state.getCollectedData().get(SERVICE_ID_KEY));
+        UUID professionalId = UUID.fromString(state.getCollectedData().get(PROFESSIONAL_ID_KEY));
+        OffsetDateTime slotStart = OffsetDateTime.parse(state.getCollectedData().get(SLOT_START_KEY));
+        Service service = serviceRepository.findById(serviceId).orElseThrow();
+        Professional professional = professionalRepository.findById(professionalId).orElseThrow();
+
+        StringBuilder text = new StringBuilder();
+        if (hasSameDayConfirmedAppointment(tenantId, phone, slotStart)) {
+            text.append("Ojo: ya tenés otro turno confirmado ese mismo día.\n");
+        }
+        text.append("¿Confirmás este turno?\n")
+                .append(service.getName())
+                .append(" con ")
+                .append(professional.getName())
+                .append(" el ")
+                .append(slotStart.format(DISPLAY_FORMAT))
+                .append(" - $")
+                .append(service.getPrice());
+
+        whatsAppProvider.sendButtons(
+                businessNumber,
+                phone,
+                text.toString(),
+                List.of(
+                        new WhatsAppProvider.Button(OPTION_CONFIRM_BOOKING, "Confirmar"),
+                        new WhatsAppProvider.Button(OPTION_CANCEL_BOOKING, "Cancelar")));
+    }
+
+    private void handleBookingConfirmation(
+            UUID tenantId, String businessNumber, String phone, BotConversationState state, InboundMessage message) {
+        String selectionId = message.selectionId();
+        if (OPTION_CANCEL_BOOKING.equals(selectionId)) {
+            state.setCurrentStep(BotStep.ROOT_MENU);
+            botConversationStateRepository.save(state);
+            whatsAppProvider.sendText(businessNumber, phone, "Sin problema, no reservé nada.");
+            showRootMenu(businessNumber, phone);
+            return;
+        }
+        if (!OPTION_CONFIRM_BOOKING.equals(selectionId)) {
+            handleUnmatchedInput(tenantId, businessNumber, phone, state);
+            return;
+        }
+
+        UUID serviceId = UUID.fromString(state.getCollectedData().get(SERVICE_ID_KEY));
+        UUID professionalId = UUID.fromString(state.getCollectedData().get(PROFESSIONAL_ID_KEY));
+        OffsetDateTime slotStart = OffsetDateTime.parse(state.getCollectedData().get(SLOT_START_KEY));
+        Customer customer = customerRepository.findByTenantIdAndPhone(tenantId, phone).orElse(null);
+        UUID customerId = customer == null ? null : customer.getId();
+
+        try {
+            botAppointmentBooker.attempt(
+                    tenantId, new CreateAppointmentRequest(professionalId, serviceId, slotStart, customerId));
+        } catch (ResponseStatusException ex) {
+            if (ex.getStatusCode() == HttpStatus.CONFLICT) {
+                // Someone else took it in the interim (spec section 5, step 5)
+                // - never fail silently, just re-offer what's free now.
+                whatsAppProvider.sendText(
+                        businessNumber, phone, "Justo se ocupó ese horario. Te muestro los horarios actualizados.");
+                state.setCurrentStep(BotStep.BOOKING_SELECT_SLOT);
+                botConversationStateRepository.save(state);
+                sendSlotList(tenantId, businessNumber, phone, state);
+                return;
+            }
+            throw ex;
+        }
+        state.setCurrentStep(BotStep.ROOT_MENU);
+        botConversationStateRepository.save(state);
+        whatsAppProvider.sendText(businessNumber, phone, "¡Listo! Tu turno quedó confirmado. ✅");
+    }
+
+    private record SlotOption(String rowId, String label, UUID professionalId, OffsetDateTime startTime) {}
+
+    private List<SlotOption> findSlots(UUID tenantId, UUID serviceId, String professionalSelection) {
+        List<Professional> candidates = OPTION_ANY_PROFESSIONAL.equals(professionalSelection)
+                ? eligibleProfessionals(serviceId)
+                : professionalRepository
+                        .findById(UUID.fromString(professionalSelection))
+                        .filter(Professional::isActive)
+                        .map(List::of)
+                        .orElse(List.of());
+        boolean showProfessionalName =
+                OPTION_ANY_PROFESSIONAL.equals(professionalSelection) && candidates.size() > 1;
+
+        ZoneId zone = ZoneId.of(
+                tenantRepository.findById(tenantId).orElseThrow().getTimezone());
+        LocalDate today = LocalDate.now(zone);
+
+        List<SlotOption> options = new ArrayList<>();
+        for (int dayOffset = 0; dayOffset < BOOKING_SEARCH_DAYS; dayOffset++) {
+            LocalDate date = today.plusDays(dayOffset);
+            for (Professional professional : candidates) {
+                for (OffsetDateTime slot :
+                        availabilityService.getAvailability(tenantId, professional.getId(), serviceId, date)) {
+                    String label = slot.format(DISPLAY_FORMAT)
+                            + (showProfessionalName ? " - " + professional.getName() : "");
+                    options.add(new SlotOption(professional.getId() + "|" + slot, label, professional.getId(), slot));
+                }
+            }
+        }
+        options.sort(Comparator.comparing(SlotOption::startTime));
+        return options.size() > MAX_SLOT_OPTIONS ? options.subList(0, MAX_SLOT_OPTIONS) : options;
+    }
+
+    private SlotOption parseSlotSelection(String selectionId) {
+        int separator = selectionId.indexOf('|');
+        if (separator < 0) {
+            return null;
+        }
+        try {
+            UUID professionalId = UUID.fromString(selectionId.substring(0, separator));
+            OffsetDateTime startTime = OffsetDateTime.parse(selectionId.substring(separator + 1));
+            return new SlotOption(selectionId, null, professionalId, startTime);
+        } catch (RuntimeException ex) {
+            return null;
+        }
+    }
+
+    private List<Professional> eligibleProfessionals(UUID serviceId) {
+        List<UUID> professionalIds = professionalServiceAssignmentRepository.findByServiceId(serviceId).stream()
+                .map(ProfessionalServiceAssignment::getProfessionalId)
+                .toList();
+        return professionalRepository.findAllById(professionalIds).stream()
+                .filter(Professional::isActive)
+                .toList();
+    }
+
+    private boolean hasSameDayConfirmedAppointment(UUID tenantId, String phone, OffsetDateTime slotStart) {
+        Customer customer = customerRepository.findByTenantIdAndPhone(tenantId, phone).orElse(null);
+        if (customer == null) {
+            return false;
+        }
+        return appointmentService.findByCustomer(tenantId, customer.getId()).stream()
+                .anyMatch(a -> a.status() == AppointmentStatus.CONFIRMED
+                        && a.startTime() != null
+                        && a.startTime().toLocalDate().equals(slotStart.toLocalDate()));
     }
 
     private void startViewingAppointments(
@@ -257,6 +537,11 @@ public class BotConversationService {
     private void resendStepOptions(UUID tenantId, String businessNumber, String phone, BotConversationState state) {
         switch (state.getCurrentStep()) {
             case BOOKING_SELECT_SERVICE -> sendServiceList(tenantId, businessNumber, phone);
+            case BOOKING_SELECT_PROFESSIONAL ->
+                sendProfessionalList(
+                        businessNumber, phone, UUID.fromString(state.getCollectedData().get(SERVICE_ID_KEY)));
+            case BOOKING_SELECT_SLOT -> sendSlotList(tenantId, businessNumber, phone, state);
+            case BOOKING_CONFIRM -> sendBookingConfirmation(tenantId, businessNumber, phone, state);
             case VIEWING_APPOINTMENTS -> sendAppointmentList(tenantId, businessNumber, phone);
             default -> showRootMenu(businessNumber, phone);
         }
@@ -297,6 +582,17 @@ public class BotConversationService {
             return OPTION_HUMAN;
         }
         return null;
+    }
+
+    private UUID parseUuidOrNull(String value) {
+        if (value == null) {
+            return null;
+        }
+        try {
+            return UUID.fromString(value);
+        } catch (IllegalArgumentException ex) {
+            return null;
+        }
     }
 
     private void touchExpiry(BotConversationState state) {

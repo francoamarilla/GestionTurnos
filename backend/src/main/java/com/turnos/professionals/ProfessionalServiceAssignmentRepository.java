@@ -9,5 +9,9 @@ public interface ProfessionalServiceAssignmentRepository
 
     List<ProfessionalServiceAssignment> findByProfessionalId(UUID professionalId);
 
+    // Reverse lookup: which professionals offer a given service (bot booking
+    // flow's "eligible professionals" step, spec section 5).
+    List<ProfessionalServiceAssignment> findByServiceId(UUID serviceId);
+
     void deleteByProfessionalId(UUID professionalId);
 }
