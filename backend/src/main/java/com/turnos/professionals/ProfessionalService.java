@@ -1,5 +1,7 @@
 package com.turnos.professionals;
 
+import com.turnos.services.Service;
+import com.turnos.services.ServiceRepository;
 import com.turnos.tenancy.Branch;
 import com.turnos.tenancy.BranchRepository;
 import java.time.DayOfWeek;
@@ -10,26 +12,32 @@ import java.util.UUID;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.http.HttpStatus;
+import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.server.ResponseStatusException;
 
 // Fully-qualifies @org.springframework.stereotype.Service below instead of
-// importing it: this class will need com.turnos.services.Service (the
-// catalog entity) once service-assignment lands, which would otherwise
-// collide with this same import.
+// importing it, since com.turnos.services.Service (the catalog entity, used
+// by the service-assignment methods) is imported above and would collide.
 @org.springframework.stereotype.Service
 public class ProfessionalService {
 
     private final BranchRepository branchRepository;
     private final ProfessionalRepository professionalRepository;
     private final ProfessionalScheduleRepository professionalScheduleRepository;
+    private final ProfessionalServiceAssignmentRepository professionalServiceAssignmentRepository;
+    private final ServiceRepository serviceRepository;
 
     public ProfessionalService(
             BranchRepository branchRepository,
             ProfessionalRepository professionalRepository,
-            ProfessionalScheduleRepository professionalScheduleRepository) {
+            ProfessionalScheduleRepository professionalScheduleRepository,
+            ProfessionalServiceAssignmentRepository professionalServiceAssignmentRepository,
+            ServiceRepository serviceRepository) {
         this.branchRepository = branchRepository;
         this.professionalRepository = professionalRepository;
         this.professionalScheduleRepository = professionalScheduleRepository;
+        this.professionalServiceAssignmentRepository = professionalServiceAssignmentRepository;
+        this.serviceRepository = serviceRepository;
     }
 
     public Page<ProfessionalResponse> findAll(UUID tenantId, Boolean active, Pageable pageable) {
@@ -89,6 +97,11 @@ public class ProfessionalService {
                 .toList();
     }
 
+    // @Transactional is required here, not optional: deleteByProfessionalId
+    // needs an active transaction to issue its remove() calls, and this only
+    // surfaces once there are existing rows to delete (an empty table masks
+    // it, which is how this was first missed).
+    @Transactional
     public List<DaySchedule> updateSchedule(UUID tenantId, UUID professionalId, List<DaySchedule> schedule) {
         Professional professional = getOwnedOrThrow(tenantId, professionalId);
 
@@ -119,6 +132,38 @@ public class ProfessionalService {
             professionalScheduleRepository.save(entity);
         }
         return getSchedule(tenantId, professionalId);
+    }
+
+    public List<UUID> getAssignedServiceIds(UUID tenantId, UUID professionalId) {
+        Professional professional = getOwnedOrThrow(tenantId, professionalId);
+        return professionalServiceAssignmentRepository.findByProfessionalId(professional.getId()).stream()
+                .map(ProfessionalServiceAssignment::getServiceId)
+                .toList();
+    }
+
+    // Full replace (PUT semantics, spec section 11): every serviceId must
+    // exist and belong to this tenant, or the whole call is rejected.
+    @Transactional
+    public List<UUID> updateServices(UUID tenantId, UUID professionalId, List<UUID> serviceIds) {
+        Professional professional = getOwnedOrThrow(tenantId, professionalId);
+        for (UUID serviceId : serviceIds) {
+            Service service = serviceRepository
+                    .findById(serviceId)
+                    .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Service not found: " + serviceId));
+            if (!service.getTenantId().equals(tenantId)) {
+                throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Service not found: " + serviceId);
+            }
+        }
+
+        professionalServiceAssignmentRepository.deleteByProfessionalId(professional.getId());
+        professionalServiceAssignmentRepository.flush();
+        for (UUID serviceId : serviceIds) {
+            ProfessionalServiceAssignment assignment = new ProfessionalServiceAssignment();
+            assignment.setProfessionalId(professional.getId());
+            assignment.setServiceId(serviceId);
+            professionalServiceAssignmentRepository.save(assignment);
+        }
+        return getAssignedServiceIds(tenantId, professionalId);
     }
 
     private Professional getOwnedOrThrow(UUID tenantId, UUID id) {

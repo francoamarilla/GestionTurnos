@@ -13,6 +13,7 @@ import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PatchMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
@@ -77,5 +78,18 @@ public class ProfessionalController {
             @PathVariable UUID id,
             @RequestBody List<DaySchedule> schedule) {
         return professionalService.updateSchedule(principal.tenantId(), id, schedule);
+    }
+
+    @GetMapping("/{id}/services")
+    public List<UUID> getServices(@AuthenticationPrincipal AuthenticatedPrincipal principal, @PathVariable UUID id) {
+        return professionalService.getAssignedServiceIds(principal.tenantId(), id);
+    }
+
+    @PutMapping("/{id}/services")
+    public List<UUID> updateServices(
+            @AuthenticationPrincipal AuthenticatedPrincipal principal,
+            @PathVariable UUID id,
+            @RequestBody List<UUID> serviceIds) {
+        return professionalService.updateServices(principal.tenantId(), id, serviceIds);
     }
 }
