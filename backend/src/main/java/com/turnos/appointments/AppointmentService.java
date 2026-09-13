@@ -119,11 +119,9 @@ public class AppointmentService {
 
     // Reschedule = cancel current + create new, linked, in one transaction
     // (spec section 3.3: there's no "rescheduled" state, this is the whole
-    // operation). The original is cancelled *before* checking/creating the
-    // new slot, not after: otherwise the original's own time would falsely
-    // block a new slot that overlaps it (e.g. nudging the start time by 15
-    // minutes). If the new slot can't be created, the exception rolls back
-    // the cancellation too - the original stays CONFIRMED.
+    // operation). Unrestricted: the business can reschedule any appointment
+    // at any time (spec rule 12, second half). rescheduleAsCustomer below is
+    // the time-boxed counterpart for the customer's own self-service.
     @Transactional
     public AppointmentResponse reschedule(UUID tenantId, UUID id, RescheduleAppointmentRequest request) {
         ZoneId zone = ZoneId.of(getTenant(tenantId).getTimezone());
@@ -131,7 +129,41 @@ public class AppointmentService {
         if (original.getStatus() != AppointmentStatus.CONFIRMED) {
             throw new ResponseStatusException(HttpStatus.CONFLICT, "Only a confirmed appointment can be rescheduled");
         }
+        Appointment replacement = rescheduleInternal(tenantId, original, request);
+        return AppointmentResponse.from(replacement, zone);
+    }
 
+    // Customer self-service (spec rule 12, first half): only within
+    // Tenant.cancellationWindowHours of the appointment's start. Called
+    // in-process by the bot (section 8) - the caller is responsible for
+    // having already identified which Customer is asking (phone lookup),
+    // there's no HTTP endpoint or JWT for the end customer.
+    public void cancelAsCustomer(UUID tenantId, UUID customerId, UUID appointmentId) {
+        Tenant tenant = getTenant(tenantId);
+        Appointment appointment = getOwnedOrThrow(tenantId, appointmentId);
+        requireCustomerOwnsConfirmedAppointment(appointment, customerId);
+        requireWithinCancellationWindow(tenant, appointment);
+
+        appointment.setStatus(AppointmentStatus.CANCELLED);
+        appointmentRepository.save(appointment);
+    }
+
+    @Transactional
+    public AppointmentResponse rescheduleAsCustomer(
+            UUID tenantId, UUID customerId, UUID appointmentId, RescheduleAppointmentRequest request) {
+        Tenant tenant = getTenant(tenantId);
+        ZoneId zone = ZoneId.of(tenant.getTimezone());
+        Appointment appointment = getOwnedOrThrow(tenantId, appointmentId);
+        requireCustomerOwnsConfirmedAppointment(appointment, customerId);
+        requireWithinCancellationWindow(tenant, appointment);
+
+        Appointment replacement = rescheduleInternal(tenantId, appointment, request);
+        return AppointmentResponse.from(replacement, zone);
+    }
+
+    // Shared by reschedule() and rescheduleAsCustomer(), same self-invocation
+    // reasoning as createInternal(): both callers are already @Transactional.
+    private Appointment rescheduleInternal(UUID tenantId, Appointment original, RescheduleAppointmentRequest request) {
         original.setStatus(AppointmentStatus.CANCELLED);
         appointmentRepository.saveAndFlush(original);
 
@@ -143,9 +175,30 @@ public class AppointmentService {
 
         Appointment replacement = createInternal(tenantId, createRequest);
         replacement.setRescheduledFromAppointmentId(original.getId());
-        replacement = appointmentRepository.save(replacement);
+        return appointmentRepository.save(replacement);
+    }
 
-        return AppointmentResponse.from(replacement, zone);
+    private void requireCustomerOwnsConfirmedAppointment(Appointment appointment, UUID customerId) {
+        if (appointment.getCustomerId() == null || !appointment.getCustomerId().equals(customerId)) {
+            throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Appointment not found");
+        }
+        if (appointment.getStatus() != AppointmentStatus.CONFIRMED) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT, "Only a confirmed appointment can be changed");
+        }
+    }
+
+    // Hour-based window subtraction from an Instant doesn't actually depend
+    // on the tenant's zone (N hours is N*3600 seconds regardless of offset);
+    // the zone matters for how this gets *presented* to the customer, which
+    // is the bot's job, not this check's.
+    private void requireWithinCancellationWindow(Tenant tenant, Appointment appointment) {
+        Instant deadline = appointment.getStartTime().minusSeconds(tenant.getCancellationWindowHours() * 3600L);
+        if (!Instant.now().isBefore(deadline)) {
+            throw new ResponseStatusException(
+                    HttpStatus.CONFLICT,
+                    "This appointment can no longer be cancelled or rescheduled (inside the "
+                            + tenant.getCancellationWindowHours() + "h window)");
+        }
     }
 
     public List<AppointmentResponse> search(
