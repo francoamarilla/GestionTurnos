@@ -25,6 +25,17 @@ public class TenantSessionContext {
         apply(false, null);
     }
 
+    // Forces pending writes to execute now, while the GUCs this class just
+    // set are still in place. Needed by callers that reset() within the same
+    // transaction they wrote in (no request-scoped filter to reset only
+    // after the transaction has already committed) - otherwise Hibernate's
+    // deferred flush would run the INSERT/UPDATE at commit time, by which
+    // point reset() has already cleared app.tenant_id, and RLS's WITH CHECK
+    // rejects the write.
+    public void flush() {
+        entityManager.flush();
+    }
+
     private void setConfig(String name, String value) {
         entityManager.unwrap(Session.class).doWork(connection -> {
             try (var statement = connection.prepareStatement("SELECT set_config(?, ?, false)")) {
