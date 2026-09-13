@@ -151,17 +151,30 @@ public class BotConversationService {
         BotConversationState state =
                 botConversationStateRepository.findByTenantIdAndCustomerPhone(tenantId, phone).orElse(null);
         boolean expired = state != null && state.getExpiresAt().isBefore(Instant.now());
+        boolean freshStart = state == null || expired;
 
-        if (state == null || expired) {
+        if (freshStart) {
             state = new BotConversationState();
             state.setTenantId(tenantId);
             state.setCustomerPhone(phone);
             state.setCollectedData(new HashMap<>());
+        }
+        touchExpiry(state);
+
+        // "Hablar con alguien" is always available, from any step, never
+        // just one option buried in whatever list happens to be showing
+        // (spec section 5) - checked before anything step-specific, and
+        // ahead of even identifying a brand-new number.
+        if (state.getCurrentStep() != BotStep.HUMAN_HANDOFF && isHumanRequest(message)) {
+            startHumanHandoff(businessNumber, phone, state);
+            return;
+        }
+
+        if (freshStart) {
             state.setCurrentStep(
                     customerRepository.findByTenantIdAndPhone(tenantId, phone).isEmpty()
                             ? BotStep.AWAITING_NAME
                             : BotStep.ROOT_MENU);
-            touchExpiry(state);
             botConversationStateRepository.save(state);
             if (state.getCurrentStep() == BotStep.AWAITING_NAME) {
                 whatsAppProvider.sendText(businessNumber, phone, "¡Hola! 👋 Antes de arrancar, ¿cómo es tu nombre?");
@@ -171,7 +184,6 @@ public class BotConversationService {
             return;
         }
 
-        touchExpiry(state);
         switch (state.getCurrentStep()) {
             case AWAITING_NAME -> handleNameCapture(tenantId, businessNumber, phone, state, message);
             case ROOT_MENU -> handleRootMenuSelection(tenantId, businessNumber, phone, state, message);
@@ -232,10 +244,11 @@ public class BotConversationService {
                     businessNumber, phone, "Por ahora no tenemos servicios disponibles para reservar.");
             return;
         }
-        List<WhatsAppProvider.ListRow> rows = services.stream()
+        List<WhatsAppProvider.ListRow> rows = new ArrayList<>(services.stream()
                 .map(s -> new WhatsAppProvider.ListRow(
                         s.getId().toString(), s.getName(), s.getDurationMinutes() + " min - $" + s.getPrice()))
-                .toList();
+                .toList());
+        rows.add(humanHandoffRow());
         whatsAppProvider.sendList(businessNumber, phone, "¿Qué servicio querés reservar?", "Ver servicios", rows);
     }
 
@@ -261,6 +274,7 @@ public class BotConversationService {
         for (Professional professional : professionals) {
             rows.add(new WhatsAppProvider.ListRow(professional.getId().toString(), professional.getName(), null));
         }
+        rows.add(humanHandoffRow());
         whatsAppProvider.sendList(businessNumber, phone, "¿Con quién preferís el turno?", "Ver profesionales", rows);
     }
 
@@ -300,7 +314,7 @@ public class BotConversationService {
                         "No encontré horarios disponibles con ese profesional en los próximos días.",
                         List.of(
                                 new WhatsAppProvider.Button(OPTION_ANY_PROFESSIONAL, "Probar cualquiera disponible"),
-                                new WhatsAppProvider.Button(OPTION_HUMAN, "Hablar con alguien")));
+                                humanHandoffButton()));
                 return;
             }
             whatsAppProvider.sendText(
@@ -310,8 +324,9 @@ public class BotConversationService {
             startHumanHandoff(businessNumber, phone, state);
             return;
         }
-        List<WhatsAppProvider.ListRow> rows =
-                slots.stream().map(s -> new WhatsAppProvider.ListRow(s.rowId(), s.label(), null)).toList();
+        List<WhatsAppProvider.ListRow> rows = new ArrayList<>(
+                slots.stream().map(s -> new WhatsAppProvider.ListRow(s.rowId(), s.label(), null)).toList());
+        rows.add(humanHandoffRow());
         whatsAppProvider.sendList(
                 businessNumber, phone, "Estos son los próximos horarios disponibles:", "Ver horarios", rows);
     }
@@ -370,7 +385,8 @@ public class BotConversationService {
                 text.toString(),
                 List.of(
                         new WhatsAppProvider.Button(OPTION_CONFIRM_BOOKING, "Confirmar"),
-                        new WhatsAppProvider.Button(OPTION_CANCEL_BOOKING, "Cancelar")));
+                        new WhatsAppProvider.Button(OPTION_CANCEL_BOOKING, "Cancelar"),
+                        humanHandoffButton()));
     }
 
     private void handleBookingConfirmation(
@@ -530,9 +546,10 @@ public class BotConversationService {
                     businessNumber, phone, "No tenés turnos próximos. Escribinos \"reservar\" para sacar uno.");
             return;
         }
-        List<WhatsAppProvider.ListRow> rows = upcoming.stream()
+        List<WhatsAppProvider.ListRow> rows = new ArrayList<>(upcoming.stream()
                 .map(a -> new WhatsAppProvider.ListRow(a.id().toString(), describeAppointment(a), null))
-                .toList();
+                .toList());
+        rows.add(humanHandoffRow());
         whatsAppProvider.sendList(businessNumber, phone, "¿Cuál de tus turnos querés ver?", "Ver turnos", rows);
     }
 
@@ -560,7 +577,8 @@ public class BotConversationService {
                 "¿Qué querés hacer con ese turno?",
                 List.of(
                         new WhatsAppProvider.Button(OPTION_CANCEL_APPOINTMENT, "Cancelar"),
-                        new WhatsAppProvider.Button(OPTION_RESCHEDULE_APPOINTMENT, "Reprogramar")));
+                        new WhatsAppProvider.Button(OPTION_RESCHEDULE_APPOINTMENT, "Reprogramar"),
+                        humanHandoffButton()));
     }
 
     private void handleAppointmentAction(
@@ -656,6 +674,18 @@ public class BotConversationService {
         whatsAppProvider.sendList(businessNumber, phone, ROOT_MENU_PROMPT, "Ver opciones", rows);
     }
 
+    // "Siempre visible, nunca escondida en un submenú" (spec section 5):
+    // every list/button prompt the bot sends includes this, on top of the
+    // global isHumanRequest() short-circuit in process() that makes tapping
+    // or typing it work from any step, not just the ones offering it.
+    private WhatsAppProvider.ListRow humanHandoffRow() {
+        return new WhatsAppProvider.ListRow(OPTION_HUMAN, "Hablar con alguien del local", null);
+    }
+
+    private WhatsAppProvider.Button humanHandoffButton() {
+        return new WhatsAppProvider.Button(OPTION_HUMAN, "Hablar con alguien");
+    }
+
     // Interactive replies carry the tapped option's id directly; free-typed
     // text (spec section 5's "unexpected text" handling covers everything
     // that doesn't match) gets a small deterministic keyword match against
@@ -678,10 +708,21 @@ public class BotConversationService {
         if (normalized.contains("turno") || normalized.contains("ver mis")) {
             return OPTION_VIEW;
         }
-        if (normalized.contains("hablar") || normalized.contains("persona") || normalized.contains("human")) {
-            return OPTION_HUMAN;
-        }
+        // Not OPTION_HUMAN here: isHumanRequest() in process() already
+        // intercepts that before this method ever runs.
         return null;
+    }
+
+    private boolean isHumanRequest(InboundMessage message) {
+        if (OPTION_HUMAN.equalsIgnoreCase(message.selectionId())) {
+            return true;
+        }
+        if (message.text() == null) {
+            return false;
+        }
+        String normalized = message.text().trim().toLowerCase(Locale.ROOT);
+        return normalized.contains("hablar") || normalized.contains("persona") || normalized.contains("human")
+                || normalized.contains("asesor");
     }
 
     private UUID parseUuidOrNull(String value) {

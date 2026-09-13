@@ -50,13 +50,15 @@ class ViewCancelRescheduleFlowTest extends AbstractIntegrationTest {
         botConversationService.handleMessage(new InboundMessage(businessNumber, phone, null, null));
         botConversationService.handleMessage(new InboundMessage(businessNumber, phone, "VIEW", null));
         assertEquals(BotStep.VIEWING_APPOINTMENTS, currentStep(fixture.tenantId(), phone));
-        assertEquals(1, whatsAppProvider.lastRows().size());
+        // The one upcoming appointment + the always-visible "Hablar con alguien" row.
+        assertEquals(2, whatsAppProvider.lastRows().size());
         assertEquals(appointmentId.toString(), whatsAppProvider.lastRows().get(0).id());
 
         botConversationService.handleMessage(
                 new InboundMessage(businessNumber, phone, appointmentId.toString(), null));
         assertEquals(BotStep.APPOINTMENT_ACTION, currentStep(fixture.tenantId(), phone));
-        assertEquals(2, whatsAppProvider.lastButtons().size());
+        // Cancelar / Reprogramar / "Hablar con alguien".
+        assertEquals(3, whatsAppProvider.lastButtons().size());
 
         botConversationService.handleMessage(new InboundMessage(businessNumber, phone, "CANCEL_APPT", null));
         assertEquals(BotStep.ROOT_MENU, currentStep(fixture.tenantId(), phone));
@@ -110,7 +112,9 @@ class ViewCancelRescheduleFlowTest extends AbstractIntegrationTest {
 
         botConversationService.handleMessage(new InboundMessage(businessNumber, phone, "RESCHEDULE_APPT", null));
         assertEquals(BotStep.BOOKING_SELECT_SLOT, currentStep(fixture.tenantId(), phone));
-        assertTrue(whatsAppProvider.lastRows().stream().allMatch(r -> r.id().startsWith(fixture.professionalId() + "|")));
+        assertTrue(whatsAppProvider.lastRows().stream()
+                .filter(r -> !r.id().equals("HUMAN"))
+                .allMatch(r -> r.id().startsWith(fixture.professionalId() + "|")));
         String slotRowId = whatsAppProvider.lastRows().get(0).id();
 
         botConversationService.handleMessage(new InboundMessage(businessNumber, phone, slotRowId, null));

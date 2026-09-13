@@ -51,14 +51,15 @@ class BookingFlowTest extends AbstractIntegrationTest {
 
         botConversationService.handleMessage(new InboundMessage(businessNumber, phone, "BOOK", null));
         assertEquals(BotStep.BOOKING_SELECT_SERVICE, currentStep(fixture.tenantId(), phone));
-        assertEquals(1, whatsAppProvider.lastRows().size());
+        // The one active service + the always-visible "Hablar con alguien" row.
+        assertEquals(2, whatsAppProvider.lastRows().size());
         String serviceRowId = whatsAppProvider.lastRows().get(0).id();
         assertEquals(fixture.serviceId().toString(), serviceRowId);
 
         botConversationService.handleMessage(new InboundMessage(businessNumber, phone, serviceRowId, null));
         assertEquals(BotStep.BOOKING_SELECT_PROFESSIONAL, currentStep(fixture.tenantId(), phone));
-        // "Cualquiera disponible" + the one eligible professional.
-        assertEquals(2, whatsAppProvider.lastRows().size());
+        // "Cualquiera disponible" + the one eligible professional + "Hablar con alguien".
+        assertEquals(3, whatsAppProvider.lastRows().size());
         String professionalRowId = whatsAppProvider.lastRows().get(1).id();
         assertEquals(fixture.professionalId().toString(), professionalRowId);
 
@@ -69,7 +70,8 @@ class BookingFlowTest extends AbstractIntegrationTest {
 
         botConversationService.handleMessage(new InboundMessage(businessNumber, phone, slotRowId, null));
         assertEquals(BotStep.BOOKING_CONFIRM, currentStep(fixture.tenantId(), phone));
-        assertEquals(2, whatsAppProvider.lastButtons().size());
+        // Confirmar / Cancelar / "Hablar con alguien".
+        assertEquals(3, whatsAppProvider.lastButtons().size());
 
         botConversationService.handleMessage(new InboundMessage(businessNumber, phone, "CONFIRM_BOOKING", null));
         assertEquals(BotStep.ROOT_MENU, currentStep(fixture.tenantId(), phone));
