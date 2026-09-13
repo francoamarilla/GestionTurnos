@@ -24,7 +24,9 @@ public record AppointmentResponse(
         OffsetDateTime completedAt,
         OffsetDateTime createdAt) {
 
-    static AppointmentResponse from(Appointment a, ZoneId zone) {
+    // Public: reused by SaleService (com.turnos.sales) - a sale is just an
+    // Appointment with origin=DIRECT_SALE, no need for a near-duplicate DTO.
+    public static AppointmentResponse from(Appointment a, ZoneId zone) {
         return new AppointmentResponse(
                 a.getId(),
                 a.getBranchId(),
