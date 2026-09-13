@@ -48,7 +48,8 @@ public class SecurityConfig {
                                 "/api/webhooks/whatsapp",
                                 "/error",
                                 "/swagger-ui/**",
-                                "/v3/api-docs/**")
+                                "/v3/api-docs/**",
+                                "/actuator/health/**")
                         .permitAll()
                         // Super Admin manages tenants/platform support only (spec section 2);
                         // every other authenticated endpoint belongs to a tenant's Admin.

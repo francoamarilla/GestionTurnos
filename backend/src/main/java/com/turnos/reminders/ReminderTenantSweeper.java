@@ -18,6 +18,7 @@ import java.util.List;
 import java.util.UUID;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.slf4j.MDC;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -63,6 +64,7 @@ class ReminderTenantSweeper {
     void sweepTenant(UUID tenantId, List<ReminderRule> activeRules) {
         try {
             tenantSessionContext.apply(false, tenantId);
+            MDC.put("tenantId", tenantId.toString());
             Branch branch = branchRepository.findByTenantId(tenantId).orElse(null);
             if (branch == null) {
                 return;
@@ -78,6 +80,7 @@ class ReminderTenantSweeper {
             tenantSessionContext.flush();
         } finally {
             tenantSessionContext.reset();
+            MDC.remove("tenantId");
         }
     }
 

@@ -34,6 +34,7 @@ import java.util.Locale;
 import java.util.UUID;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.slf4j.MDC;
 import org.springframework.http.HttpStatus;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.server.ResponseStatusException;
@@ -139,10 +140,12 @@ public class BotConversationService {
         UUID tenantId = integration.getTenantId();
         try {
             tenantSessionContext.apply(false, tenantId);
+            MDC.put("tenantId", tenantId.toString());
             process(tenantId, message.businessPhoneNumber(), message);
             tenantSessionContext.flush();
         } finally {
             tenantSessionContext.reset();
+            MDC.remove("tenantId");
         }
     }
 

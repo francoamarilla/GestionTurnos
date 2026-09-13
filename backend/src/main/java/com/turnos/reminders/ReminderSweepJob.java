@@ -30,14 +30,17 @@ public class ReminderSweepJob {
     private final TenantSessionContext tenantSessionContext;
     private final TenantRepository tenantRepository;
     private final ReminderTenantSweeper reminderTenantSweeper;
+    private final ReminderJobHealthIndicator reminderJobHealthIndicator;
 
     public ReminderSweepJob(
             TenantSessionContext tenantSessionContext,
             TenantRepository tenantRepository,
-            ReminderTenantSweeper reminderTenantSweeper) {
+            ReminderTenantSweeper reminderTenantSweeper,
+            ReminderJobHealthIndicator reminderJobHealthIndicator) {
         this.tenantSessionContext = tenantSessionContext;
         this.tenantRepository = tenantRepository;
         this.reminderTenantSweeper = reminderTenantSweeper;
+        this.reminderJobHealthIndicator = reminderJobHealthIndicator;
     }
 
     // fixedDelay (not fixedRate): never overlaps itself if a run takes
@@ -60,6 +63,10 @@ public class ReminderSweepJob {
         } catch (RuntimeException ex) {
             log.error("Bot conversation cleanup failed", ex);
         }
+        // Recorded even if some individual tenant failed above - this job's
+        // health is about the scheduler still cycling, not any one tenant's
+        // business outcome (that's what GET /api/reminders/failed is for).
+        reminderJobHealthIndicator.recordCompletedRun();
     }
 
     // No flush() before reset() here, unlike ReminderTenantSweeper/

@@ -7,6 +7,7 @@ import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import java.io.IOException;
 import java.util.UUID;
+import org.slf4j.MDC;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Component;
 import org.springframework.web.filter.OncePerRequestFilter;
@@ -33,15 +34,22 @@ public class TenantContextFilter extends OncePerRequestFilter {
     protected void doFilterInternal(
             HttpServletRequest request, HttpServletResponse response, FilterChain filterChain)
             throws ServletException, IOException {
-        applySessionContext();
+        UUID tenantId = applySessionContext();
+        // Spec section 10: every relevant log entry carries tenantId. MDC is
+        // thread-bound, so this covers everything logged for the rest of
+        // this request on this thread.
+        if (tenantId != null) {
+            MDC.put("tenantId", tenantId.toString());
+        }
         try {
             filterChain.doFilter(request, response);
         } finally {
             tenantSessionContext.reset();
+            MDC.remove("tenantId");
         }
     }
 
-    private void applySessionContext() {
+    private UUID applySessionContext() {
         var authentication = SecurityContextHolder.getContext().getAuthentication();
         boolean isSuperAdmin = false;
         UUID tenantId = null;
@@ -50,5 +58,6 @@ public class TenantContextFilter extends OncePerRequestFilter {
             tenantId = principal.tenantId();
         }
         tenantSessionContext.apply(isSuperAdmin, tenantId);
+        return tenantId;
     }
 }
