@@ -60,4 +60,12 @@ public class AppointmentController {
             @Valid @RequestBody UpdateAppointmentStatusRequest request) {
         return appointmentService.updateStatus(principal.tenantId(), principal.id(), id, request.status());
     }
+
+    @PostMapping("/{id}/reschedule")
+    public AppointmentResponse reschedule(
+            @AuthenticationPrincipal AuthenticatedPrincipal principal,
+            @PathVariable UUID id,
+            @Valid @RequestBody RescheduleAppointmentRequest request) {
+        return appointmentService.reschedule(principal.tenantId(), id, request);
+    }
 }

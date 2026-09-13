@@ -55,7 +55,16 @@ public class AppointmentService {
     @Transactional
     public AppointmentResponse create(UUID tenantId, CreateAppointmentRequest request) {
         ZoneId zone = ZoneId.of(getTenant(tenantId).getTimezone());
+        Appointment appointment = createInternal(tenantId, request);
+        return AppointmentResponse.from(appointment, zone);
+    }
 
+    // Shared by create() and reschedule(). Deliberately not @Transactional
+    // itself: called from reschedule() on the same bean (self-invocation),
+    // which would silently skip Spring's transactional proxy anyway - both
+    // public entry points are already @Transactional, so this just
+    // participates in whichever transaction is already active.
+    private Appointment createInternal(UUID tenantId, CreateAppointmentRequest request) {
         Professional professional = professionalRepository
                 .findById(request.professionalId())
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Professional not found"));
@@ -102,12 +111,41 @@ public class AppointmentService {
         appointment.setOrigin(AppointmentOrigin.DASHBOARD);
 
         try {
-            appointment = appointmentRepository.saveAndFlush(appointment);
+            return appointmentRepository.saveAndFlush(appointment);
         } catch (DataIntegrityViolationException e) {
             throw new ResponseStatusException(HttpStatus.CONFLICT, "That time is no longer available", e);
         }
+    }
 
-        return AppointmentResponse.from(appointment, zone);
+    // Reschedule = cancel current + create new, linked, in one transaction
+    // (spec section 3.3: there's no "rescheduled" state, this is the whole
+    // operation). The original is cancelled *before* checking/creating the
+    // new slot, not after: otherwise the original's own time would falsely
+    // block a new slot that overlaps it (e.g. nudging the start time by 15
+    // minutes). If the new slot can't be created, the exception rolls back
+    // the cancellation too - the original stays CONFIRMED.
+    @Transactional
+    public AppointmentResponse reschedule(UUID tenantId, UUID id, RescheduleAppointmentRequest request) {
+        ZoneId zone = ZoneId.of(getTenant(tenantId).getTimezone());
+        Appointment original = getOwnedOrThrow(tenantId, id);
+        if (original.getStatus() != AppointmentStatus.CONFIRMED) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT, "Only a confirmed appointment can be rescheduled");
+        }
+
+        original.setStatus(AppointmentStatus.CANCELLED);
+        appointmentRepository.saveAndFlush(original);
+
+        UUID professionalId =
+                request.professionalId() != null ? request.professionalId() : original.getProfessionalId();
+        UUID serviceId = request.serviceId() != null ? request.serviceId() : original.getServiceId();
+        CreateAppointmentRequest createRequest =
+                new CreateAppointmentRequest(professionalId, serviceId, request.startTime(), original.getCustomerId());
+
+        Appointment replacement = createInternal(tenantId, createRequest);
+        replacement.setRescheduledFromAppointmentId(original.getId());
+        replacement = appointmentRepository.save(replacement);
+
+        return AppointmentResponse.from(replacement, zone);
     }
 
     public List<AppointmentResponse> search(
