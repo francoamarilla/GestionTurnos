@@ -18,9 +18,18 @@ import org.springframework.web.filter.OncePerRequestFilter;
 // query (spec section 8). Relies on spring.jpa.open-in-view (Boot's default)
 // keeping a single DB connection bound to the request thread, so the
 // connection TenantSessionContext sets this on is the same one every query
-// in this request will use. Resets it before the connection goes back to
-// the pool - see TenantSessionContext for why plain set_config (session-
-// scoped) is used here instead of a request-spanning transaction.
+// in this request will use - which in turn requires
+// hibernate.connection.handling_mode=IMMEDIATE_ACQUISITION_AND_HOLD
+// (see application.properties): open-in-view's default handling mode
+// only binds one *EntityManager* per request, not one physical
+// *connection* - outside of an explicit transaction (true for every
+// read-only, non-@Transactional query method) it still acquires and
+// releases a connection per call, so under concurrent requests a query
+// could silently land on a connection some other request had already
+// reset, making RLS filter out rows that are actually there. Resets the
+// GUC before the connection goes back to the pool - see
+// TenantSessionContext for why plain set_config (session-scoped) is used
+// here instead of a request-spanning transaction.
 @Component
 public class TenantContextFilter extends OncePerRequestFilter {
 
