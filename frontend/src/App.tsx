@@ -7,6 +7,7 @@ import { Placeholder } from "./layout/Placeholder";
 import HomeDashboard from "./home/HomeDashboard";
 import ServicesPage from "./services/ServicesPage";
 import ProfessionalsPage from "./professionals/ProfessionalsPage";
+import CustomersPage from "./customers/CustomersPage";
 
 export default function App() {
   return (
@@ -25,7 +26,7 @@ export default function App() {
             <Route path="/agenda" element={<Placeholder title="Agenda" />} />
             <Route path="/services" element={<ServicesPage />} />
             <Route path="/professionals" element={<ProfessionalsPage />} />
-            <Route path="/customers" element={<Placeholder title="Clientes" />} />
+            <Route path="/customers" element={<CustomersPage />} />
             <Route path="/sales" element={<Placeholder title="Ventas" />} />
             <Route path="/statistics" element={<Placeholder title="Estadísticas" />} />
             <Route path="/settings" element={<Placeholder title="Configuración" />} />
