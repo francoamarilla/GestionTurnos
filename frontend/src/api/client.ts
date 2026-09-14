@@ -29,6 +29,16 @@ export function setAuthToken(token: string | null): void {
   authToken = token;
 }
 
+// Session/routing lives in AuthContext (React), which registers this - a
+// 401 from ANY screen (spec section 11: JWT expires in ~24h, no refresh
+// token) should drop the session and bounce to /login, not just fail the
+// one request that happened to trigger it.
+let onUnauthorized: (() => void) | null = null;
+
+export function setUnauthorizedHandler(handler: (() => void) | null): void {
+  onUnauthorized = handler;
+}
+
 export async function apiFetch<T>(path: string, options: RequestInit = {}): Promise<T> {
   const headers = new Headers(options.headers);
   if (options.body && !headers.has("Content-Type")) {
@@ -48,6 +58,12 @@ export async function apiFetch<T>(path: string, options: RequestInit = {}): Prom
   const data: unknown = text ? JSON.parse(text) : null;
 
   if (!response.ok) {
+    // A 401 on the login attempt itself is just "wrong credentials", not an
+    // expired session - nothing to drop, and the handler runs harmlessly
+    // (already logged out) but is skipped anyway to keep this precise.
+    if (response.status === 401 && path !== "/auth/login") {
+      onUnauthorized?.();
+    }
     const problem = (data && typeof data === "object" ? (data as ProblemDetail) : null) ?? null;
     throw new ApiError(response.status, problem, problem?.detail ?? problem?.title ?? response.statusText);
   }
