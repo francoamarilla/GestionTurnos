@@ -49,7 +49,17 @@ function loadSession(): Session | null {
 }
 
 export function AuthProvider({ children }: { children: ReactNode }) {
-  const [session, setSession] = useState<Session | null>(() => loadSession());
+  // Set synchronously during the initializer (render phase), not in a
+  // useEffect below: effects fire children-first, so a screen that fetches
+  // on mount (e.g. the home dashboard) would otherwise race ahead of the
+  // token being attached on a fresh page load with an existing session,
+  // sending its first requests with no Authorization header and getting
+  // logged out by the resulting 401s.
+  const [session, setSession] = useState<Session | null>(() => {
+    const initial = loadSession();
+    setAuthToken(initial?.accessToken ?? null);
+    return initial;
+  });
 
   useEffect(() => {
     setAuthToken(session?.accessToken ?? null);

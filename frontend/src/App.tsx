@@ -1,14 +1,10 @@
 import { BrowserRouter, Routes, Route } from "react-router-dom";
-import { AuthProvider, useAuth } from "./auth/AuthContext";
+import { AuthProvider } from "./auth/AuthContext";
 import { RequireAuth } from "./auth/RequireAuth";
 import LoginPage from "./auth/LoginPage";
 import { AppLayout } from "./layout/AppLayout";
 import { Placeholder } from "./layout/Placeholder";
-
-function Home() {
-  const { session } = useAuth();
-  return <Placeholder title="Inicio" note={`Hola, ${session?.establishmentName ?? "Super Admin"} (${session?.role}).`} />;
-}
+import HomeDashboard from "./home/HomeDashboard";
 
 export default function App() {
   return (
@@ -23,7 +19,7 @@ export default function App() {
               </RequireAuth>
             }
           >
-            <Route path="/" element={<Home />} />
+            <Route path="/" element={<HomeDashboard />} />
             <Route path="/agenda" element={<Placeholder title="Agenda" />} />
             <Route path="/services" element={<Placeholder title="Servicios" />} />
             <Route path="/professionals" element={<Placeholder title="Profesionales" />} />
