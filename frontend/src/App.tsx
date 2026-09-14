@@ -8,6 +8,7 @@ import HomeDashboard from "./home/HomeDashboard";
 import ServicesPage from "./services/ServicesPage";
 import ProfessionalsPage from "./professionals/ProfessionalsPage";
 import CustomersPage from "./customers/CustomersPage";
+import AgendaPage from "./agenda/AgendaPage";
 
 export default function App() {
   return (
@@ -23,7 +24,7 @@ export default function App() {
             }
           >
             <Route path="/" element={<HomeDashboard />} />
-            <Route path="/agenda" element={<Placeholder title="Agenda" />} />
+            <Route path="/agenda" element={<AgendaPage />} />
             <Route path="/services" element={<ServicesPage />} />
             <Route path="/professionals" element={<ProfessionalsPage />} />
             <Route path="/customers" element={<CustomersPage />} />
