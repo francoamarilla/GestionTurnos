@@ -3,7 +3,6 @@ import { AuthProvider } from "./auth/AuthContext";
 import { RequireAuth } from "./auth/RequireAuth";
 import LoginPage from "./auth/LoginPage";
 import { AppLayout } from "./layout/AppLayout";
-import { Placeholder } from "./layout/Placeholder";
 import HomeDashboard from "./home/HomeDashboard";
 import ServicesPage from "./services/ServicesPage";
 import ProfessionalsPage from "./professionals/ProfessionalsPage";
@@ -11,6 +10,7 @@ import CustomersPage from "./customers/CustomersPage";
 import AgendaPage from "./agenda/AgendaPage";
 import SalesPage from "./sales/SalesPage";
 import StatisticsPage from "./statistics/StatisticsPage";
+import SettingsPage from "./settings/SettingsPage";
 
 export default function App() {
   return (
@@ -32,7 +32,7 @@ export default function App() {
             <Route path="/customers" element={<CustomersPage />} />
             <Route path="/sales" element={<SalesPage />} />
             <Route path="/statistics" element={<StatisticsPage />} />
-            <Route path="/settings" element={<Placeholder title="Configuración" />} />
+            <Route path="/settings" element={<SettingsPage />} />
           </Route>
         </Routes>
       </AuthProvider>
