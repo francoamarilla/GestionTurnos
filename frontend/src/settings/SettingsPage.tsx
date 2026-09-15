@@ -154,6 +154,7 @@ function ScheduleEditor({ schedule: initial, onSaved }: { schedule: DaySchedule[
     <div className="card">
       <h2>Horario general</h2>
       {error && <p className="error-text">{error}</p>}
+      <div style={{ overflowX: "auto" }}>
       <table>
         <tbody>
           {DAYS.map(({ key, label }) => {
@@ -167,7 +168,16 @@ function ScheduleEditor({ schedule: initial, onSaved }: { schedule: DaySchedule[
                     <input
                       type="checkbox"
                       checked={day.closed}
-                      onChange={(e) => updateDay(key, { closed: e.target.checked })}
+                      onChange={(e) =>
+                        updateDay(key, {
+                          closed: e.target.checked,
+                          // Reopening a day with no prior hours left the time
+                          // inputs blank until Guardar silently defaulted
+                          // them - fill them in immediately instead.
+                          openTime: e.target.checked ? day.openTime : (day.openTime ?? "09:00:00"),
+                          closeTime: e.target.checked ? day.closeTime : (day.closeTime ?? "18:00:00"),
+                        })
+                      }
                     />{" "}
                     Cerrado
                   </label>
@@ -195,6 +205,7 @@ function ScheduleEditor({ schedule: initial, onSaved }: { schedule: DaySchedule[
           })}
         </tbody>
       </table>
+      </div>
       <div className="form-actions">
         <button type="button" onClick={save} disabled={saving}>
           {saving ? "Guardando..." : "Guardar"}
