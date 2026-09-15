@@ -33,11 +33,25 @@ interface Page<T> {
   content: T[];
 }
 
+type DayOfWeek = "MONDAY" | "TUESDAY" | "WEDNESDAY" | "THURSDAY" | "FRIDAY" | "SATURDAY" | "SUNDAY";
+
+interface DaySchedule {
+  dayOfWeek: DayOfWeek;
+  openTime: string | null;
+  closeTime: string | null;
+  closed: boolean;
+}
+
+interface EstablishmentResponse {
+  schedule: DaySchedule[];
+}
+
 interface AgendaData {
   professionals: ProfessionalResponse[];
   services: NamedEntity[];
   customers: CustomerOption[];
   appointments: AppointmentResponse[];
+  schedule: DaySchedule[];
 }
 
 function toIsoDate(date: Date): string {
@@ -62,8 +76,41 @@ function customerLabel(customer: CustomerOption | undefined): string {
   return customer.name ?? customer.phone ?? "Sin cliente";
 }
 
+const DAY_OF_WEEK_BY_JS_INDEX: DayOfWeek[] = [
+  "SUNDAY",
+  "MONDAY",
+  "TUESDAY",
+  "WEDNESDAY",
+  "THURSDAY",
+  "FRIDAY",
+  "SATURDAY",
+];
+
+function dayOfWeekFromIso(iso: string): DayOfWeek {
+  const [y, m, d] = iso.split("-").map(Number);
+  return DAY_OF_WEEK_BY_JS_INDEX[new Date(y, m - 1, d).getDay()];
+}
+
+function timeToMinutes(time: string): number {
+  const [h, m] = time.slice(0, 5).split(":").map(Number);
+  return h * 60 + m;
+}
+
+function minutesToTime(minutes: number): string {
+  const h = String(Math.floor(minutes / 60)).padStart(2, "0");
+  const m = String(minutes % 60).padStart(2, "0");
+  return `${h}:${m}`;
+}
+
+const SLOT_MINUTES = 30;
+// ponytail: fallback window for a day with no establishment schedule row
+// (or explicitly closed) - keeps the grid usable instead of empty; actual
+// booking availability is still enforced server-side regardless of this.
+const FALLBACK_OPEN_TIME = "09:00";
+const FALLBACK_CLOSE_TIME = "20:00";
+
 async function loadAgenda(date: string): Promise<AgendaData> {
-  const [professionalsPage, services, customersPage, appointments] = await Promise.all([
+  const [professionalsPage, services, customersPage, appointments, establishment] = await Promise.all([
     api.get<Page<ProfessionalResponse>>("/professionals?active=true&size=100"),
     api.get<NamedEntity[]>("/services"),
     // ponytail: one page of up to 200 customers for the booking dropdown -
@@ -71,12 +118,14 @@ async function loadAgenda(date: string): Promise<AgendaData> {
     // screen's search is the real way to find someone in a bigger base.
     api.get<Page<CustomerOption>>("/customers?size=200"),
     api.get<AppointmentResponse[]>(`/appointments?from=${date}&to=${date}`),
+    api.get<EstablishmentResponse>("/establishment"),
   ]);
   return {
     professionals: professionalsPage.content,
     services,
     customers: customersPage.content,
     appointments: appointments.sort((a, b) => a.startTime.localeCompare(b.startTime)),
+    schedule: establishment.schedule,
   };
 }
 
@@ -413,33 +462,89 @@ export default function AgendaPage() {
       ) : data.professionals.length === 0 ? (
         <p>No hay profesionales activos.</p>
       ) : (
-        <div className="agenda-grid">
-          {data.professionals.map((professional) => {
-            const dayAppointments = data.appointments.filter((a) => a.professionalId === professional.id);
-            return (
-              <div key={professional.id} className="card agenda-column">
-                <h2>{professional.name}</h2>
-                <button type="button" onClick={() => setBookingFor(professional)}>
-                  Agregar turno
-                </button>
-                {dayAppointments.length === 0 ? (
-                  <p>Sin turnos.</p>
-                ) : (
-                  dayAppointments.map((appt) => (
-                    <AppointmentCard
-                      key={appt.id}
-                      appointment={appt}
-                      serviceName={data.services.find((s) => s.id === appt.serviceId)?.name ?? "Servicio"}
-                      customer={data.customers.find((c) => c.id === appt.customerId)}
-                      onChanged={reload}
-                      onReschedule={() => setRescheduling(appt)}
+        (() => {
+          const daySchedule = data.schedule.find((s) => s.dayOfWeek === dayOfWeekFromIso(date));
+          const isOpen = daySchedule && !daySchedule.closed && daySchedule.openTime && daySchedule.closeTime;
+          const openMinutes = timeToMinutes(isOpen ? daySchedule.openTime! : FALLBACK_OPEN_TIME);
+          const closeMinutes = timeToMinutes(isOpen ? daySchedule.closeTime! : FALLBACK_CLOSE_TIME);
+          const slotCount = Math.max(1, Math.ceil((closeMinutes - openMinutes) / SLOT_MINUTES));
+          const slotStarts = Array.from({ length: slotCount }, (_, i) => openMinutes + i * SLOT_MINUTES);
+
+          return (
+            <>
+              {daySchedule?.closed && (
+                <p>El establecimiento está cerrado este día (mostrando de todos modos un horario de referencia).</p>
+              )}
+              <div
+                className="agenda-hourgrid"
+                style={{
+                  gridTemplateColumns: `64px repeat(${data.professionals.length}, minmax(180px, 1fr))`,
+                  gridTemplateRows: `auto repeat(${slotCount}, 68px)`,
+                }}
+              >
+                {data.professionals.map((professional, colIndex) => (
+                  <div
+                    key={professional.id}
+                    className="agenda-hourgrid-header"
+                    style={{ gridColumn: colIndex + 2, gridRow: 1 }}
+                  >
+                    <div>{professional.name}</div>
+                    <button type="button" onClick={() => setBookingFor(professional)}>
+                      Agregar turno
+                    </button>
+                  </div>
+                ))}
+
+                {slotStarts.map((minutes, rowIndex) => (
+                  <div
+                    key={minutes}
+                    className="agenda-hourgrid-time"
+                    style={{ gridColumn: 1, gridRow: rowIndex + 2 }}
+                  >
+                    {minutesToTime(minutes)}
+                  </div>
+                ))}
+
+                {data.professionals.map((professional, colIndex) =>
+                  slotStarts.map((minutes, rowIndex) => (
+                    <div
+                      key={`${professional.id}-${minutes}`}
+                      className="agenda-hourgrid-cell"
+                      style={{ gridColumn: colIndex + 2, gridRow: rowIndex + 2 }}
                     />
-                  ))
+                  )),
+                )}
+
+                {data.professionals.map((professional, colIndex) =>
+                  data.appointments
+                    .filter((a) => a.professionalId === professional.id)
+                    .map((appt) => {
+                      const startMinutes = timeToMinutes(formatTime(appt.startTime));
+                      const rowStart = Math.min(
+                        Math.max(Math.floor((startMinutes - openMinutes) / SLOT_MINUTES) + 2, 2),
+                        slotCount + 1,
+                      );
+                      const rowSpan = Math.max(1, Math.round(appt.durationMinutes / SLOT_MINUTES));
+                      return (
+                        <div
+                          key={appt.id}
+                          style={{ gridColumn: colIndex + 2, gridRow: `${rowStart} / span ${rowSpan}` }}
+                        >
+                          <AppointmentCard
+                            appointment={appt}
+                            serviceName={data.services.find((s) => s.id === appt.serviceId)?.name ?? "Servicio"}
+                            customer={data.customers.find((c) => c.id === appt.customerId)}
+                            onChanged={reload}
+                            onReschedule={() => setRescheduling(appt)}
+                          />
+                        </div>
+                      );
+                    }),
                 )}
               </div>
-            );
-          })}
-        </div>
+            </>
+          );
+        })()
       )}
     </div>
   );
