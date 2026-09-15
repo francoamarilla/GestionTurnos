@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { api, ApiError } from "../api/client";
+import { formatMoney } from "../format";
 
 interface AppointmentResponse {
   id: string;
@@ -36,10 +37,6 @@ function toIsoDate(date: Date): string {
   const m = String(date.getMonth() + 1).padStart(2, "0");
   const d = String(date.getDate()).padStart(2, "0");
   return `${y}-${m}-${d}`;
-}
-
-function formatMoney(amount: number): string {
-  return `$${amount.toFixed(2)}`;
 }
 
 function customerLabel(customer: CustomerOption | undefined): string {
@@ -175,7 +172,12 @@ export default function SalesPage() {
   const [to, setTo] = useState(today);
   const [professionalFilter, setProfessionalFilter] = useState("");
   const [sales, setSales] = useState<AppointmentResponse[] | null>(null);
+  // All professionals (active + inactive) - a sale's professional shouldn't
+  // read as "Profesional" forever just because they were later deactivated.
   const [professionals, setProfessionals] = useState<NamedEntity[]>([]);
+  // Active-only subset for the new-sale form, which can't book with someone
+  // deactivated.
+  const [activeProfessionals, setActiveProfessionals] = useState<NamedEntity[]>([]);
   const [services, setServices] = useState<ServiceOption[]>([]);
   const [customers, setCustomers] = useState<CustomerOption[]>([]);
   const [error, setError] = useState<string | null>(null);
@@ -200,12 +202,14 @@ export default function SalesPage() {
 
   useEffect(() => {
     Promise.all([
+      api.get<Page<NamedEntity>>("/professionals?size=100"),
       api.get<Page<NamedEntity>>("/professionals?active=true&size=100"),
       api.get<ServiceOption[]>("/services"),
       reloadCustomers(),
     ])
-      .then(([professionalsPage, serviceList]) => {
+      .then(([professionalsPage, activeProfessionalsPage, serviceList]) => {
         setProfessionals(professionalsPage.content);
+        setActiveProfessionals(activeProfessionalsPage.content);
         setServices(serviceList);
       })
       .catch((err) => setError(err instanceof ApiError ? err.message : "No se pudieron cargar los datos."));
@@ -216,7 +220,7 @@ export default function SalesPage() {
       <div>
         <h1>Ventas</h1>
         <NewSaleForm
-          professionals={professionals}
+          professionals={activeProfessionals}
           services={services}
           customers={customers}
           onCancel={() => setShowForm(false)}
