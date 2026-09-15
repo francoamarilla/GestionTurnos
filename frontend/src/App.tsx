@@ -10,6 +10,7 @@ import ProfessionalsPage from "./professionals/ProfessionalsPage";
 import CustomersPage from "./customers/CustomersPage";
 import AgendaPage from "./agenda/AgendaPage";
 import SalesPage from "./sales/SalesPage";
+import StatisticsPage from "./statistics/StatisticsPage";
 
 export default function App() {
   return (
@@ -30,7 +31,7 @@ export default function App() {
             <Route path="/professionals" element={<ProfessionalsPage />} />
             <Route path="/customers" element={<CustomersPage />} />
             <Route path="/sales" element={<SalesPage />} />
-            <Route path="/statistics" element={<Placeholder title="Estadísticas" />} />
+            <Route path="/statistics" element={<StatisticsPage />} />
             <Route path="/settings" element={<Placeholder title="Configuración" />} />
           </Route>
         </Routes>
