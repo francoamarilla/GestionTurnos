@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { api, ApiError } from "../api/client";
 import { useAuth } from "../auth/AuthContext";
 import TenantsAdminPage from "../admin/TenantsAdminPage";
+import { formatMoney } from "../format";
 
 interface AppointmentResponse {
   id: string;
@@ -54,10 +55,6 @@ function addDays(date: Date, days: number): Date {
 
 function formatTime(iso: string): string {
   return iso.slice(11, 16);
-}
-
-function formatMoney(amount: number): string {
-  return `$${amount.toFixed(2)}`;
 }
 
 const REMINDER_TYPE_LABEL: Record<string, string> = {
@@ -124,13 +121,25 @@ export default function HomeDashboard() {
   const [data, setData] = useState<DashboardData | null>(null);
   const [error, setError] = useState<string | null>(null);
 
+  function reload() {
+    loadDashboard()
+      .then((result) => {
+        // Clear any error from a previous failed attempt - the render
+        // below shows `error` ahead of `data`, so a stale error here would
+        // otherwise keep masking every future successful load indefinitely
+        // (this component stays mounted across role changes and normal
+        // navigation, it's never remounted just because a retry happened).
+        setError(null);
+        setData(result);
+      })
+      .catch((err) => setError(err instanceof ApiError ? err.message : "No se pudo cargar el inicio."));
+  }
+
   useEffect(() => {
     if (session?.role !== "ADMIN") {
       return;
     }
-    loadDashboard()
-      .then(setData)
-      .catch((err) => setError(err instanceof ApiError ? err.message : "No se pudo cargar el inicio."));
+    reload();
   }, [session?.role]);
 
   if (session?.role !== "ADMIN") {
@@ -142,6 +151,9 @@ export default function HomeDashboard() {
       <div>
         <h1>Inicio</h1>
         <p className="error-text">{error}</p>
+        <button type="button" onClick={reload}>
+          Reintentar
+        </button>
       </div>
     );
   }

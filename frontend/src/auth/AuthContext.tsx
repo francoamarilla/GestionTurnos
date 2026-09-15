@@ -86,11 +86,20 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       expiresAt: Date.now() + response.expiresIn * 1000,
     };
     localStorage.setItem(STORAGE_KEY, JSON.stringify(next));
+    // Set synchronously here too (not just via the [session] effect below):
+    // navigate() right after login() mounts the destination screen (e.g.
+    // HomeDashboard) in the same batched update as this setSession, and
+    // React fires that child's mount effect before this component's own
+    // [session] effect (children-before-parents) - a screen that fetches
+    // on mount would otherwise race ahead with whatever token was set
+    // before this login (stale, or none), not this one.
+    setAuthToken(next.accessToken);
     setSession(next);
   }
 
   function logout() {
     localStorage.removeItem(STORAGE_KEY);
+    setAuthToken(null);
     setSession(null);
   }
 
