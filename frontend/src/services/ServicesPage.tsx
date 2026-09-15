@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { useForm } from "react-hook-form";
 import { api, ApiError } from "../api/client";
+import { formatMoney } from "../format";
 
 interface ServiceResponse {
   id: string;
@@ -16,10 +17,6 @@ interface ServiceFormValues {
   description: string;
   durationMinutes: number;
   price: number;
-}
-
-function formatMoney(amount: number): string {
-  return `$${amount.toFixed(2)}`;
 }
 
 function ServiceForm({

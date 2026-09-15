@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { api, ApiError } from "../api/client";
+import { formatMoney } from "../format";
 
 interface ProfessionalAmount {
   professionalId: string;
@@ -46,10 +47,6 @@ function toIsoDate(date: Date): string {
 
 function firstOfMonth(date: Date): Date {
   return new Date(date.getFullYear(), date.getMonth(), 1);
-}
-
-function formatMoney(amount: number): string {
-  return `$${amount.toFixed(2)}`;
 }
 
 function formatPercent(rate: number): string {
