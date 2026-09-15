@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { useForm } from "react-hook-form";
 import { api, ApiError } from "../api/client";
 import { formatMoney } from "../format";
+import { ActiveBadge, AppointmentStatusBadge } from "../components/Badge";
 
 interface CustomerResponse {
   id: string;
@@ -170,7 +171,9 @@ function CustomerDetail({ customer, onBack }: { customer: CustomerResponse; onBa
                 </td>
                 <td>{services.get(appt.serviceId) ?? "Servicio"}</td>
                 <td>{professionals.get(appt.professionalId) ?? "Profesional"}</td>
-                <td>{appt.status}</td>
+                <td>
+                  <AppointmentStatusBadge status={appt.status} />
+                </td>
                 <td>{formatMoney(appt.price)}</td>
               </tr>
             ))}
@@ -204,7 +207,10 @@ export default function CustomersPage() {
     const query = search ? `&search=${encodeURIComponent(search)}` : "";
     api
       .get<Page<CustomerResponse>>(`/customers?page=${pageNumber}${query}`)
-      .then(setPage)
+      .then((result) => {
+        setError(null);
+        setPage(result);
+      })
       .catch((err) => setError(err instanceof ApiError ? err.message : "No se pudieron cargar los clientes."));
   }
 
@@ -295,7 +301,9 @@ export default function CustomersPage() {
                 <tr key={customer.id}>
                   <td>{customer.name ?? "—"}</td>
                   <td>{customer.phone ?? "—"}</td>
-                  <td>{customer.active ? "Activo" : "Inactivo"}</td>
+                  <td>
+                    <ActiveBadge active={customer.active} />
+                  </td>
                   <td>
                     <div className="form-actions">
                       <button type="button" className="secondary" onClick={() => setView({ mode: "detail", customer })}>

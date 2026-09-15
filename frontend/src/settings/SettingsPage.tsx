@@ -224,7 +224,10 @@ function ClosuresCard() {
   function reload() {
     api
       .get<ClosureResponse[]>("/establishment/closures")
-      .then((result) => setClosures(result.sort((a, b) => a.date.localeCompare(b.date))))
+      .then((result) => {
+        setError(null);
+        setClosures(result.sort((a, b) => a.date.localeCompare(b.date)));
+      })
       .catch((err) => setError(err instanceof ApiError ? err.message : "No se pudieron cargar los feriados."));
   }
 
@@ -305,9 +308,13 @@ function WhatsAppCard() {
   useEffect(() => {
     api
       .get<WhatsAppIntegrationResponse>("/establishment/whatsapp-integration")
-      .then(setIntegration)
+      .then((result) => {
+        setError(null);
+        setIntegration(result);
+      })
       .catch((err) => {
         if (err instanceof ApiError && err.status === 404) {
+          setError(null);
           setIntegration("none");
         } else {
           setError(err instanceof ApiError ? err.message : "No se pudo cargar la integración de WhatsApp.");
@@ -340,7 +347,10 @@ export default function SettingsPage() {
   function reload() {
     api
       .get<EstablishmentResponse>("/establishment")
-      .then(setEstablishment)
+      .then((result) => {
+        setError(null);
+        setEstablishment(result);
+      })
       .catch((err) => setError(err instanceof ApiError ? err.message : "No se pudo cargar el establecimiento."));
   }
 

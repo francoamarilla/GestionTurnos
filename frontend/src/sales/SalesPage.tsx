@@ -187,7 +187,10 @@ export default function SalesPage() {
     const filter = professionalFilter ? `&professionalId=${professionalFilter}` : "";
     api
       .get<AppointmentResponse[]>(`/sales?from=${from}&to=${to}${filter}`)
-      .then((result) => setSales(result.sort((a, b) => b.startTime.localeCompare(a.startTime))))
+      .then((result) => {
+        setError(null);
+        setSales(result.sort((a, b) => b.startTime.localeCompare(a.startTime)));
+      })
       .catch((err) => setError(err instanceof ApiError ? err.message : "No se pudieron cargar las ventas."));
   }
 

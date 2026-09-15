@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { api, ApiError } from "../api/client";
+import { AppointmentStatusBadge } from "../components/Badge";
 
 interface ProfessionalResponse {
   id: string;
@@ -369,7 +370,7 @@ function AppointmentCard({
       <br />
       {customerLabel(customer)}
       <br />
-      <span>{appointment.status}</span>
+      <AppointmentStatusBadge status={appointment.status} />
       {error && <p className="error-text">{error}</p>}
       {appointment.status === "CONFIRMED" && (
         <div className="form-actions">
@@ -400,7 +401,13 @@ export default function AgendaPage() {
 
   function reload() {
     loadAgenda(date)
-      .then(setData)
+      .then((result) => {
+        // Same class of bug as HomeDashboard's stale error: this component
+        // stays mounted across date changes, so a transient failure on one
+        // date must not keep masking every later successful load.
+        setError(null);
+        setData(result);
+      })
       .catch((err) => setError(err instanceof ApiError ? err.message : "No se pudo cargar la agenda."));
   }
 
@@ -479,7 +486,7 @@ export default function AgendaPage() {
                 className="agenda-hourgrid"
                 style={{
                   gridTemplateColumns: `64px repeat(${data.professionals.length}, minmax(180px, 1fr))`,
-                  gridTemplateRows: `auto repeat(${slotCount}, 68px)`,
+                  gridTemplateRows: `auto repeat(${slotCount}, 76px)`,
                 }}
               >
                 {data.professionals.map((professional, colIndex) => (

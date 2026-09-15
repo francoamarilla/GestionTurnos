@@ -69,6 +69,7 @@ export default function StatisticsPage() {
       api.get<NamedEntity[]>("/services"),
     ])
       .then(([professionalsPage, serviceList]) => {
+        setError(null);
         setProfessionals(new Map(professionalsPage.content.map((p) => [p.id, p.name])));
         setServices(new Map(serviceList.map((s) => [s.id, s.name])));
       })
@@ -78,7 +79,10 @@ export default function StatisticsPage() {
   useEffect(() => {
     api
       .get<StatisticsSummaryResponse>(`/statistics/summary?from=${from}&to=${to}`)
-      .then(setSummary)
+      .then((result) => {
+        setError(null);
+        setSummary(result);
+      })
       .catch((err) => setError(err instanceof ApiError ? err.message : "No se pudieron cargar las estadísticas."));
   }, [from, to]);
 

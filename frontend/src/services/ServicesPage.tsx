@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { useForm } from "react-hook-form";
 import { api, ApiError } from "../api/client";
 import { formatMoney } from "../format";
+import { ActiveBadge } from "../components/Badge";
 
 interface ServiceResponse {
   id: string;
@@ -115,7 +116,10 @@ export default function ServicesPage() {
   function reload() {
     api
       .get<ServiceResponse[]>("/services")
-      .then(setServices)
+      .then((result) => {
+        setError(null);
+        setServices(result);
+      })
       .catch((err) => setError(err instanceof ApiError ? err.message : "No se pudieron cargar los servicios."));
   }
 
@@ -180,7 +184,9 @@ export default function ServicesPage() {
                 <td>{service.name}</td>
                 <td>{service.durationMinutes} min</td>
                 <td>{formatMoney(service.price)}</td>
-                <td>{service.active ? "Activo" : "Inactivo"}</td>
+                <td>
+                  <ActiveBadge active={service.active} />
+                </td>
                 <td>
                   <div className="form-actions">
                     <button type="button" className="secondary" onClick={() => setEditing(service)}>

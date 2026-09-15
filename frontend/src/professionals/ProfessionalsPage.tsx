@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { useForm } from "react-hook-form";
 import { api, ApiError } from "../api/client";
+import { ActiveBadge } from "../components/Badge";
 
 interface ProfessionalResponse {
   id: string;
@@ -301,7 +302,10 @@ export default function ProfessionalsPage() {
     // if that ever stops being true.
     api
       .get<Page<ProfessionalResponse>>("/professionals?size=100")
-      .then((page) => setProfessionals(page.content))
+      .then((page) => {
+        setError(null);
+        setProfessionals(page.content);
+      })
       .catch((err) => setError(err instanceof ApiError ? err.message : "No se pudieron cargar los profesionales."));
   }
 
@@ -382,7 +386,9 @@ export default function ProfessionalsPage() {
               <tr key={professional.id}>
                 <td>{professional.name}</td>
                 <td>{professional.contactPhone ?? "—"}</td>
-                <td>{professional.active ? "Activo" : "Inactivo"}</td>
+                <td>
+                  <ActiveBadge active={professional.active} />
+                </td>
                 <td>
                   <div className="form-actions">
                     <button type="button" className="secondary" onClick={() => setView({ mode: "form", professional })}>
