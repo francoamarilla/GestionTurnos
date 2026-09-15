@@ -360,14 +360,17 @@ th {
   border: 1px solid var(--color-border);
   border-radius: var(--radius-card);
   margin-top: 16px;
-  overflow: hidden;
-  overflow-x: auto;
+  max-height: 65vh;
+  overflow: auto;
 }
 
 .agenda-hourgrid-header {
   background: var(--color-bg-page);
   padding: 10px;
   text-align: left;
+  position: sticky;
+  top: 0;
+  z-index: 1;
 }
 
 .agenda-hourgrid-header > div {
@@ -415,4 +418,128 @@ th {
   background: var(--color-warning-bg);
   border: 1px solid var(--color-accent-secondary);
   color: var(--color-warning-text);
+}
+
+/* ---------------------------------------------------------------------
+   Statistics: hero figure, magnitude bars, meters, KPI tiles.
+   Bars compare magnitude across a named set (sales/services per
+   professional) - one neutral hue, never categorical color, per the
+   dataviz skill ("the series ARE the subject" doesn't apply here, the
+   *amount* does). Meters are single-value gauges (a ratio against a
+   limit) - fill + a lighter step of the very same hue as its track.
+--------------------------------------------------------------------- */
+.stats-hero {
+  grid-column: 1 / -1;
+}
+
+.hero-figure {
+  font-size: 48px;
+  font-weight: 500;
+  margin: 4px 0 20px;
+}
+
+.bar-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 6px 0;
+}
+
+.bar-row-label {
+  flex: 0 0 auto;
+  max-width: 45%;
+  font-size: var(--text-secondary-size);
+  color: var(--color-text-secondary);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.bar-track {
+  flex: 1;
+  height: 20px;
+  background: var(--color-bg-page);
+  border-radius: var(--radius-control);
+  overflow: hidden;
+}
+
+.bar-fill {
+  display: block;
+  height: 100%;
+  background: var(--color-neutral-text);
+  border-radius: 0 var(--radius-control) var(--radius-control) 0;
+}
+
+.bar-row-value {
+  flex: 0 0 auto;
+  min-width: 56px;
+  font-size: var(--text-secondary-size);
+  font-weight: 500;
+  text-align: right;
+}
+
+.meter-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 20px;
+  margin-top: 20px;
+}
+
+.meter-value {
+  font-size: 28px;
+  font-weight: 500;
+  margin: 4px 0 12px;
+}
+
+.meter-track {
+  display: block;
+  height: 10px;
+  border-radius: 999px;
+  overflow: hidden;
+}
+
+.meter-fill {
+  display: block;
+  height: 100%;
+  border-radius: 999px;
+}
+
+.meter-error .meter-track {
+  background: var(--color-error-bg);
+}
+
+.meter-error .meter-fill {
+  background: var(--color-error-text);
+}
+
+.meter-warning .meter-track {
+  background: var(--color-warning-bg);
+}
+
+.meter-warning .meter-fill {
+  background: var(--color-warning-text);
+}
+
+.meter-neutral .meter-track {
+  background: var(--color-neutral-bg);
+}
+
+.meter-neutral .meter-fill {
+  background: var(--color-neutral-text);
+}
+
+.kpi-row {
+  display: flex;
+  gap: 32px;
+  margin-top: 8px;
+}
+
+.kpi-tile-value {
+  font-size: 28px;
+  font-weight: 500;
+}
+
+.kpi-tile-label {
+  font-size: var(--text-secondary-size);
+  color: var(--color-text-secondary);
 }
