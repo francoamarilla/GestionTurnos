@@ -11,9 +11,13 @@ public record TenantResponse(
         String businessCategory,
         Integer cancellationWindowHours,
         String timezone,
-        Instant createdAt) {
+        Instant createdAt,
+        // Null when no WhatsAppIntegration exists yet for this tenant. Passed
+        // through verbatim (not coerced to a boolean) since verificationStatus
+        // is a free string until a BSP is chosen (see WhatsAppIntegration).
+        String whatsAppStatus) {
 
-    static TenantResponse from(Tenant tenant) {
+    static TenantResponse from(Tenant tenant, String whatsAppStatus) {
         return new TenantResponse(
                 tenant.getId(),
                 tenant.getBusinessName(),
@@ -22,6 +26,7 @@ public record TenantResponse(
                 tenant.getBusinessCategory(),
                 tenant.getCancellationWindowHours(),
                 tenant.getTimezone(),
-                tenant.getCreatedAt());
+                tenant.getCreatedAt(),
+                whatsAppStatus);
     }
 }

@@ -3,6 +3,7 @@ package com.turnos.tenancy;
 import com.turnos.auth.AdminRole;
 import com.turnos.auth.AdminUser;
 import com.turnos.auth.AdminUserRepository;
+import com.turnos.whatsapp.WhatsAppIntegrationRepository;
 import java.util.List;
 import java.util.UUID;
 import org.springframework.http.HttpStatus;
@@ -17,25 +18,41 @@ public class TenantAdminService {
     private final TenantRepository tenantRepository;
     private final BranchRepository branchRepository;
     private final AdminUserRepository adminUserRepository;
+    private final WhatsAppIntegrationRepository whatsAppIntegrationRepository;
     private final PasswordEncoder passwordEncoder;
 
     public TenantAdminService(
             TenantRepository tenantRepository,
             BranchRepository branchRepository,
             AdminUserRepository adminUserRepository,
+            WhatsAppIntegrationRepository whatsAppIntegrationRepository,
             PasswordEncoder passwordEncoder) {
         this.tenantRepository = tenantRepository;
         this.branchRepository = branchRepository;
         this.adminUserRepository = adminUserRepository;
+        this.whatsAppIntegrationRepository = whatsAppIntegrationRepository;
         this.passwordEncoder = passwordEncoder;
     }
 
+    // ponytail: one lookup per tenant - fine for the "sin pulir" SuperAdmin
+    // screen's realistic MVP tenant counts; a bulk findByTenantIdIn would be
+    // the fix if this list ever needs to scale.
     public List<TenantResponse> findAll() {
-        return tenantRepository.findAll().stream().map(TenantResponse::from).toList();
+        return tenantRepository.findAll().stream()
+                .map(t -> TenantResponse.from(t, whatsAppStatus(t.getId())))
+                .toList();
     }
 
     public TenantResponse findById(UUID id) {
-        return TenantResponse.from(getOrThrow(id));
+        Tenant tenant = getOrThrow(id);
+        return TenantResponse.from(tenant, whatsAppStatus(tenant.getId()));
+    }
+
+    private String whatsAppStatus(UUID tenantId) {
+        return whatsAppIntegrationRepository
+                .findByTenantId(tenantId)
+                .map(i -> i.getVerificationStatus())
+                .orElse(null);
     }
 
     // Creates the tenant, its single MVP branch, and the first Admin login
@@ -70,7 +87,8 @@ public class TenantAdminService {
         admin.setActive(true);
         adminUserRepository.save(admin);
 
-        return TenantResponse.from(tenant);
+        // Brand new tenant - no WhatsAppIntegration can exist for it yet.
+        return TenantResponse.from(tenant, null);
     }
 
     @Transactional
@@ -88,7 +106,8 @@ public class TenantAdminService {
         if (request.cancellationWindowHours() != null) {
             tenant.setCancellationWindowHours(request.cancellationWindowHours());
         }
-        return TenantResponse.from(tenantRepository.save(tenant));
+        tenant = tenantRepository.save(tenant);
+        return TenantResponse.from(tenant, whatsAppStatus(tenant.getId()));
     }
 
     private Tenant getOrThrow(UUID id) {

@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { api, ApiError } from "../api/client";
 import { useAuth } from "../auth/AuthContext";
+import TenantsAdminPage from "../admin/TenantsAdminPage";
 
 interface AppointmentResponse {
   id: string;
@@ -133,12 +134,7 @@ export default function HomeDashboard() {
   }, [session?.role]);
 
   if (session?.role !== "ADMIN") {
-    return (
-      <div>
-        <h1>Inicio</h1>
-        <p>Sesión de Super Admin — el panel de turnos es solo para administradores de establecimiento.</p>
-      </div>
-    );
+    return <TenantsAdminPage />;
   }
 
   if (error) {

@@ -1,7 +1,7 @@
 import { NavLink, Outlet } from "react-router-dom";
 import { useAuth } from "../auth/AuthContext";
 
-const NAV_ITEMS = [
+const ADMIN_NAV_ITEMS = [
   { to: "/", label: "Inicio", end: true },
   { to: "/agenda", label: "Agenda" },
   { to: "/services", label: "Servicios" },
@@ -12,14 +12,19 @@ const NAV_ITEMS = [
   { to: "/settings", label: "Configuración" },
 ];
 
+// Super Admin only manages establishments (spec section 7: "sin pulir"),
+// none of the tenant-scoped screens above apply to that role/session.
+const SUPER_ADMIN_NAV_ITEMS = [{ to: "/", label: "Establecimientos", end: true }];
+
 export function AppLayout() {
   const { session, logout } = useAuth();
+  const navItems = session?.role === "SUPER_ADMIN" ? SUPER_ADMIN_NAV_ITEMS : ADMIN_NAV_ITEMS;
   return (
     <div className="app-shell">
       <nav className="sidebar">
         <div className="sidebar-brand">Turnos</div>
         <ul>
-          {NAV_ITEMS.map((item) => (
+          {navItems.map((item) => (
             <li key={item.to}>
               <NavLink to={item.to} end={item.end}>
                 {item.label}
