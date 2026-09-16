@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState, type CSSProperties } from "react";
+import { useLocation, useNavigate } from "react-router-dom";
 import { ApiError } from "../api/client";
 import { useToast } from "../components/Toast";
 import { AppointmentDetailDialog, NewAppointmentDialog } from "./AppointmentDialogs";
@@ -44,7 +45,14 @@ export default function AgendaPage() {
   const [appointments, setAppointments] = useState<{ date: string; list: Appointment[] } | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [filter, setFilter] = useState("all");
-  const [dialog, setDialog] = useState<DialogState>(null);
+  const location = useLocation();
+  const navigate = useNavigate();
+  // Other screens (Inicio) open the booking dialog via router state:
+  // navigate("/agenda", { state: { book: { professionalId?, minutes? } } }).
+  const [dialog, setDialog] = useState<DialogState>(() => {
+    const book = (location.state as { book?: { professionalId?: string; minutes?: number } } | null)?.book;
+    return book ? { kind: "new", ...book } : null;
+  });
   const [now, setNow] = useState<{ date: string; minutes: number } | null>(null);
   const boardRef = useRef<HTMLDivElement>(null);
   const scrolledFor = useRef<string | null>(null);
@@ -71,6 +79,11 @@ export default function AgendaPage() {
   }
 
   useEffect(loadAll, []);
+
+  // Consume the router state so a reload doesn't reopen the dialog.
+  useEffect(() => {
+    if (location.state) navigate(location.pathname, { replace: true, state: null });
+  }, [location.state, location.pathname, navigate]);
 
   useEffect(() => {
     if (date) reloadDay(date);
