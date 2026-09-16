@@ -1,19 +1,24 @@
-type BadgeVariant = "success" | "warning" | "error" | "neutral";
+// Hues match the mockup tokens (tokens.css).
+type BadgeVariant = "brick" | "pine" | "amber" | "slate";
 
 export function Badge({ variant, children }: { variant: BadgeVariant; children: React.ReactNode }) {
-  return <span className={`badge badge-${variant}`}>{children}</span>;
+  return (
+    <span className={`badge badge-${variant}`}>
+      <i aria-hidden="true" />
+      {children}
+    </span>
+  );
 }
 
 export type AppointmentStatus = "CONFIRMED" | "COMPLETED" | "CANCELLED" | "NO_SHOW";
 
-// success = Confirmado, warning = No asistió, error = Cancelado,
-// neutral = Completado - the app's own semantic mapping, not a generic
-// "green means done" convention.
+// Mapping from Mockups/agenda-mockup.html: brick = Confirmado,
+// pine = Completado, amber = No asistió, slate = Cancelado.
 const APPOINTMENT_STATUS: Record<AppointmentStatus, { variant: BadgeVariant; label: string }> = {
-  CONFIRMED: { variant: "success", label: "Confirmado" },
-  COMPLETED: { variant: "neutral", label: "Completado" },
-  CANCELLED: { variant: "error", label: "Cancelado" },
-  NO_SHOW: { variant: "warning", label: "No asistió" },
+  CONFIRMED: { variant: "brick", label: "Confirmado" },
+  COMPLETED: { variant: "pine", label: "Completado" },
+  CANCELLED: { variant: "slate", label: "Cancelado" },
+  NO_SHOW: { variant: "amber", label: "No asistió" },
 };
 
 export function AppointmentStatusBadge({ status }: { status: AppointmentStatus }) {
@@ -21,6 +26,7 @@ export function AppointmentStatusBadge({ status }: { status: AppointmentStatus }
   return <Badge variant={variant}>{label}</Badge>;
 }
 
+// Mapping from Mockups/tablas-mockup.html: .badge.on / .badge.off.
 export function ActiveBadge({ active }: { active: boolean }) {
-  return <Badge variant={active ? "success" : "neutral"}>{active ? "Activo" : "Inactivo"}</Badge>;
+  return <Badge variant={active ? "pine" : "slate"}>{active ? "Activo" : "Inactivo"}</Badge>;
 }

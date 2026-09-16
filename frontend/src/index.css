@@ -1,58 +1,47 @@
+@import "./tokens.css";
+
 /* ---------------------------------------------------------------------
-   Design tokens
-   Single source of truth for color, type, radius and spacing. Every
-   component rule below reads from these — never hardcode a hex value
-   or a raw px font-size in a component file, add a token here instead.
-   No dark-mode palette is defined: the previous light/dark pair is
-   replaced by this one deliberate warm palette (see project notes).
+   Base layout & shared components, ported from the mockups
+   (Mockups/*.html). Palette lives in tokens.css — never hardcode a hex
+   value here or in a component file.
+
+   The --color-* names below are legacy aliases so screens not yet
+   migrated to the mockups keep rendering with the new palette (and
+   dark mode). New rules should read the mockup tokens directly.
 --------------------------------------------------------------------- */
 :root {
-  /* Color: surfaces & text */
-  --color-bg-page: #f7f3ec;
-  --color-surface: #ffffff;
-  --color-text: #292420;
-  --color-text-secondary: #7a7168;
-  --color-border: #e6dfd3;
+  /* ponytail: legacy aliases, delete once every screen is migrated */
+  --color-bg-page: var(--paper);
+  --color-surface: var(--surface);
+  --color-text: var(--ink);
+  --color-text-secondary: var(--muted);
+  --color-border: var(--border);
+  --color-accent-primary: var(--brick);
+  --color-accent-primary-contrast: #fff;
+  --color-accent-secondary: var(--amber);
+  --color-accent-secondary-bg: var(--amber-soft);
+  --color-success-text: var(--pine);
+  --color-success-bg: var(--pine-soft);
+  --color-warning-text: var(--amber);
+  --color-warning-bg: var(--amber-soft);
+  --color-error-text: var(--brick);
+  --color-error-bg: var(--brick-soft);
+  --color-neutral-text: var(--slate);
+  --color-neutral-bg: var(--slate-soft);
 
-  /* Color: accents — primary is reserved for the one primary action per
-     view (the default, unclassed <button>); secondary marks nav/selection
-     state and is always used in its tinted form, never as a solid fill. */
-  --color-accent-primary: #a6482a;
-  --color-accent-primary-hover: #8f3c22;
-  --color-accent-primary-contrast: #ffffff;
-  --color-accent-secondary: #b8791c;
-  --color-accent-secondary-bg: #f5ead6;
-
-  /* Color: semantic status pairs (text on tinted background, never a flat
-     "traffic light" color). Mapping follows the app's own vocabulary:
-     success = Confirmado, warning = No asistió, error = Cancelado,
-     neutral = Completado. Warning intentionally reuses the secondary
-     accent's tint — this app only has one "amber" in its palette. */
-  --color-success-text: #3b6d28;
-  --color-success-bg: #e8efdf;
-  --color-warning-text: #8a5a0f;
-  --color-warning-bg: var(--color-accent-secondary-bg);
-  --color-error-text: #932e1f;
-  --color-error-bg: #f5e1dc;
-  --color-neutral-text: #5c544b;
-  --color-neutral-bg: #efebe3;
-
-  /* Type */
-  --font-sans: "Public Sans", system-ui, "Segoe UI", sans-serif;
+  --font-sans: "Archivo", system-ui, -apple-system, "Segoe UI", sans-serif;
   --text-page-title-size: 22px;
-  --text-section-title-size: 18px;
+  --text-section-title-size: 17px;
   --text-card-size: 14px;
   --text-secondary-size: 13px;
-  --text-caption-size: 11px;
+  --text-caption-size: 11.5px;
 
-  /* Radius */
-  --radius-control: 8px;
-  --radius-card: 12px;
+  --radius-control: 9px;
+  --radius-card: 14px;
 
-  font: 400 var(--text-card-size) / 1.5 var(--font-sans);
-  color-scheme: light;
-  color: var(--color-text);
-  background: var(--color-bg-page);
+  font: 400 var(--text-card-size) / 1.45 var(--font-sans);
+  color: var(--ink);
+  background: var(--paper);
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
 }
@@ -64,6 +53,7 @@
 body {
   margin: 0;
   min-height: 100svh;
+  background: var(--paper);
 }
 
 #root {
@@ -73,7 +63,8 @@ body {
 h1,
 h2,
 h3 {
-  font-weight: 500;
+  font-weight: 700;
+  letter-spacing: -0.02em;
   margin: 0;
 }
 
@@ -94,7 +85,20 @@ textarea {
 }
 
 a {
-  color: var(--color-accent-primary);
+  color: var(--brick);
+}
+
+:focus-visible {
+  outline: 2px solid var(--brick);
+  outline-offset: 2px;
+  border-radius: 4px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  * {
+    transition: none !important;
+    animation: none !important;
+  }
 }
 
 .centered-page {
@@ -106,9 +110,10 @@ a {
 }
 
 .card {
-  background: var(--color-surface);
-  border: 1px solid var(--color-border);
+  background: var(--surface);
+  border: 1px solid var(--border);
   border-radius: var(--radius-card);
+  box-shadow: var(--shadow);
   padding: 28px;
   width: 100%;
   max-width: 380px;
@@ -124,172 +129,438 @@ a {
 .field {
   display: flex;
   flex-direction: column;
-  gap: 5px;
+  gap: 6px;
   text-align: left;
 }
 
 .field span {
   font-size: var(--text-secondary-size);
-  color: var(--color-text-secondary);
+  font-weight: 600;
 }
 
 .field input,
-.field select {
-  padding: 9px 11px;
-  border: 1px solid var(--color-border);
+.field select,
+.field textarea,
+.search-input {
+  padding: 9px 12px;
+  border: 1px solid var(--border-strong);
   border-radius: var(--radius-control);
-  background: var(--color-surface);
+  background: var(--surface);
+}
+
+.field input:focus,
+.field select:focus,
+.field textarea:focus,
+.search-input:focus {
+  outline: 2px solid var(--brick);
+  outline-offset: -1px;
+  border-color: var(--brick);
+}
+
+.search-input {
+  min-width: 240px;
 }
 
 .error-text {
-  color: var(--color-error-text);
+  color: var(--brick);
   font-size: var(--text-secondary-size);
 }
 
-/* The default, unclassed button is the ONE primary action on its view -
-   reserve it for that; every other button on the same screen should be
-   .secondary. */
+/* ---------------------------------------------------------------------
+   Buttons (mockup .btn). The default, unclassed button is the ONE
+   primary action on its view (mockup .btn.primary); every other button
+   on the same screen is .secondary (mockup .btn) or .ghost.
+   Modifiers: .sm (compact), .icon (icon-only).
+--------------------------------------------------------------------- */
 button {
-  padding: 10px 18px;
-  border: 1px solid var(--color-accent-primary);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  padding: 8px 13px;
+  border: 1px solid var(--brick);
   border-radius: var(--radius-control);
-  background: var(--color-accent-primary);
-  color: var(--color-accent-primary-contrast);
-  font-weight: 500;
+  background: var(--brick);
+  color: #fff;
+  font-size: 13.5px;
+  font-weight: 600;
+  white-space: nowrap;
   cursor: pointer;
 }
 
+button svg {
+  width: 15px;
+  height: 15px;
+  stroke: currentColor;
+  stroke-width: 2;
+  fill: none;
+  flex: none;
+}
+
 button:hover:not(:disabled) {
-  background: var(--color-accent-primary-hover);
-  border-color: var(--color-accent-primary-hover);
+  filter: brightness(1.07);
 }
 
 button:disabled {
-  opacity: 0.5;
-  cursor: default;
+  opacity: 0.45;
+  cursor: not-allowed;
 }
 
 button.secondary {
-  background: transparent;
-  color: var(--color-text);
-  border-color: var(--color-border);
+  background: var(--surface);
+  color: var(--ink);
+  border-color: var(--border-strong);
 }
 
 button.secondary:hover:not(:disabled) {
-  background: var(--color-bg-page);
-  border-color: var(--color-text-secondary);
+  filter: none;
+  border-color: var(--ink);
+}
+
+button.ghost {
+  background: none;
+  border-color: transparent;
+  color: var(--muted);
+  font-weight: 500;
+}
+
+button.ghost:hover:not(:disabled) {
+  filter: none;
+  background: var(--brick-soft);
+  color: var(--brick);
+}
+
+button.sm {
+  padding: 5px 10px;
+  font-size: 12.5px;
+}
+
+button.icon {
+  padding: 6px;
+  background: none;
+  border-color: transparent;
+  color: var(--muted);
+  border-radius: 8px;
+}
+
+button.icon:hover:not(:disabled) {
+  filter: none;
+  background: var(--slate-soft);
+  color: var(--ink);
+}
+
+button.icon svg {
+  width: 17px;
+  height: 17px;
 }
 
 /* ---------------------------------------------------------------------
-   Status badges — the reference pattern for any "estado" cell: a
-   Badge component (frontend/src/components/Badge.tsx) picks one of
-   these four variants, never a color literal.
+   Status badges (mockup .badge): pill + leading dot. Components pick a
+   hue variant via components/Badge.tsx, never a color literal.
 --------------------------------------------------------------------- */
 .badge {
   display: inline-flex;
   align-items: center;
-  padding: 2px 10px;
-  border-radius: var(--radius-control);
-  font-size: var(--text-secondary-size);
-  font-weight: 500;
-  line-height: 1.7;
+  gap: 6px;
+  padding: 3px 10px;
+  border-radius: 999px;
+  font-size: 12.5px;
+  font-weight: 600;
   white-space: nowrap;
 }
 
-.badge-success {
-  color: var(--color-success-text);
-  background: var(--color-success-bg);
+.badge i {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: currentColor;
 }
 
-.badge-warning {
-  color: var(--color-warning-text);
-  background: var(--color-warning-bg);
+.badge-brick {
+  color: var(--brick);
+  background: var(--brick-soft);
 }
 
-.badge-error {
-  color: var(--color-error-text);
-  background: var(--color-error-bg);
+.badge-pine {
+  color: var(--pine);
+  background: var(--pine-soft);
 }
 
-.badge-neutral {
-  color: var(--color-neutral-text);
-  background: var(--color-neutral-bg);
+.badge-amber {
+  color: var(--amber);
+  background: var(--amber-soft);
 }
 
+.badge-slate {
+  color: var(--slate);
+  background: var(--slate-soft);
+}
+
+/* ---------------------------------------------------------------------
+   App shell (mockup .app / .side): fixed-height grid, grouped sidebar
+   with icons, scrolling main column.
+--------------------------------------------------------------------- */
 .app-shell {
-  display: flex;
-  min-height: 100svh;
+  display: grid;
+  grid-template-columns: 232px 1fr;
+  height: 100svh;
+  overflow: hidden;
 }
 
 .sidebar {
-  width: 224px;
-  flex-shrink: 0;
-  background: var(--color-surface);
-  border-right: 1px solid var(--color-border);
+  background: var(--surface-2);
+  border-right: 1px solid var(--border);
   display: flex;
   flex-direction: column;
-  padding: 20px 0;
+  gap: 22px;
+  padding: 20px 12px 14px;
+  overflow-y: auto;
 }
 
 .sidebar-brand {
-  font-weight: 500;
-  font-size: var(--text-page-title-size);
-  padding: 0 20px 20px;
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  padding: 0 8px;
+  font-size: 16px;
+  font-weight: 700;
+  letter-spacing: -0.02em;
 }
 
-.sidebar ul {
-  list-style: none;
-  margin: 0;
-  padding: 0;
-  flex: 1;
+.sidebar-mark {
+  width: 26px;
+  height: 26px;
+  border-radius: 7px;
+  background: var(--brick);
+  display: grid;
+  place-items: center;
+  flex: none;
+}
+
+.sidebar-mark svg {
+  width: 15px;
+  height: 15px;
+  stroke: #fff;
+  stroke-width: 2;
+  stroke-linecap: round;
+  fill: none;
+}
+
+.nav-group {
   display: flex;
   flex-direction: column;
-  gap: 2px;
+  gap: 1px;
 }
 
-.sidebar li {
-  padding: 0 12px;
+.nav-group-label {
+  font-size: 11px;
+  color: var(--muted);
+  padding: 0 10px 6px;
+  letter-spacing: 0.01em;
 }
 
 .sidebar a {
-  display: block;
-  padding: 10px 12px;
-  border-radius: var(--radius-control);
-  color: var(--color-text);
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 10px;
+  border-radius: 8px;
+  color: var(--ink);
   text-decoration: none;
+  font-size: 13.5px;
+  font-weight: 500;
+  white-space: nowrap;
+}
+
+.sidebar a svg {
+  width: 16px;
+  height: 16px;
+  stroke: var(--muted);
+  stroke-width: 1.7;
+  fill: none;
+  flex: none;
 }
 
 .sidebar a:hover {
-  background: var(--color-bg-page);
+  background: var(--brick-soft);
 }
 
 .sidebar a.active {
-  background: var(--color-accent-secondary-bg);
-  color: var(--color-accent-secondary);
-  font-weight: 500;
+  background: var(--brick);
+  color: #fff;
+}
+
+.sidebar a.active svg {
+  stroke: #fff;
 }
 
 .sidebar-footer {
-  margin: 12px 12px 0;
-  padding: 16px 8px 0;
-  border-top: 1px solid var(--color-border);
+  margin-top: auto;
+  border-top: 1px solid var(--border);
+  padding: 12px 8px 0;
   display: flex;
-  flex-direction: column;
-  gap: 10px;
+  align-items: center;
+  gap: 9px;
+}
+
+.avatar {
+  width: 30px;
+  height: 30px;
+  border-radius: 50%;
+  background: var(--brick);
+  color: #fff;
+  display: grid;
+  place-items: center;
+  font-size: 12px;
+  font-weight: 700;
+  flex: none;
 }
 
 .sidebar-user {
-  font-size: var(--text-secondary-size);
-  color: var(--color-text-secondary);
-  padding: 0 4px;
+  min-width: 0;
+  flex: 1;
+}
+
+.sidebar-user b {
+  display: block;
+  font-size: 13px;
+  font-weight: 600;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .main-content {
-  flex: 1;
-  padding: 36px;
   min-width: 0;
+  overflow-y: auto;
+  padding: 22px 26px 44px;
 }
 
+/* ---------------------------------------------------------------------
+   Page toolbar (mockup .bar / .head): title (+ optional subtitle) on
+   the left, filters/actions pushed right with .spacer or
+   .page-bar-actions.
+   <div class="page-bar"><h1>…</h1><div class="spacer"/>…</div>
+--------------------------------------------------------------------- */
+.page-bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 12px;
+  margin: -22px -26px 18px;
+  padding: 16px 26px 12px;
+  border-bottom: 1px solid var(--border);
+}
+
+.page-bar p {
+  margin: 3px 0 0;
+  color: var(--muted);
+  font-size: 13.5px;
+}
+
+.page-bar-actions {
+  margin-left: auto;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+
+.spacer {
+  flex: 1;
+}
+
+/* ---------------------------------------------------------------------
+   Tables (mockup tablas). A bare <table> works as-is; wrap it in
+   .table-card for the mockup's card with .table-tools (search/filters
+   row) and .table-foot (count/pagination) around it.
+   Cell modifiers: td/th.num (right-aligned figures); row modifiers:
+   tr.clickable, tr.off (inactive record).
+--------------------------------------------------------------------- */
+table {
+  width: 100%;
+  border-collapse: collapse;
+  margin-top: 16px;
+}
+
+th {
+  text-align: left;
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--muted);
+  padding: 10px 16px;
+  border-bottom: 1px solid var(--border);
+  white-space: nowrap;
+}
+
+td {
+  text-align: left;
+  padding: 11px 16px;
+  font-size: 13.5px;
+  vertical-align: middle;
+}
+
+tbody tr {
+  border-bottom: 1px solid color-mix(in srgb, var(--border) 55%, transparent);
+}
+
+tbody tr:last-child {
+  border-bottom: 0;
+}
+
+th.num,
+td.num {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+tr.clickable {
+  cursor: pointer;
+}
+
+tr.clickable:hover {
+  background: var(--surface-2);
+}
+
+tr.off {
+  opacity: 0.62;
+}
+
+.table-card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-card);
+  box-shadow: var(--shadow);
+  overflow-x: auto;
+}
+
+.table-card table {
+  margin: 0;
+}
+
+.table-tools,
+.table-foot {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+  padding: 13px 16px;
+}
+
+.table-tools {
+  border-bottom: 1px solid var(--border);
+}
+
+.table-foot {
+  border-top: 1px solid var(--border);
+  padding: 11px 16px;
+  font-size: 13px;
+  color: var(--muted);
+}
+
+/* ---------------------------------------------------------------------
+   Legacy layout helpers still used by screens.
+--------------------------------------------------------------------- */
 .dashboard-grid {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
@@ -324,33 +595,61 @@ button.secondary:hover:not(:disabled) {
   margin: 16px 0;
 }
 
-.search-input {
-  padding: 9px 11px;
-  border: 1px solid var(--color-border);
-  border-radius: var(--radius-control);
-  background: var(--color-surface);
-  min-width: 240px;
-}
+/* Mobile: the sidebar collapses into a sticky, horizontally scrolling
+   tab bar (mockup .mobilebar). */
+@media (max-width: 900px) {
+  .app-shell {
+    grid-template-columns: 1fr;
+    grid-template-rows: auto 1fr;
+  }
 
-table {
-  width: 100%;
-  border-collapse: collapse;
-  margin-top: 16px;
-}
+  .sidebar {
+    flex-direction: row;
+    align-items: center;
+    gap: 8px;
+    padding: 10px 14px;
+    border-right: 0;
+    border-bottom: 1px solid var(--border);
+    overflow-x: auto;
+    overflow-y: hidden;
+  }
 
-th,
-td {
-  text-align: left;
-  padding: 10px 12px;
-  border-bottom: 1px solid var(--color-border);
-}
+  .sidebar-brand span,
+  .nav-group-label,
+  .sidebar-user,
+  .sidebar a svg {
+    display: none;
+  }
 
-th {
-  color: var(--color-text-secondary);
-  font-weight: 500;
-  font-size: var(--text-caption-size);
-  text-transform: uppercase;
-  letter-spacing: 0.03em;
+  .nav-group {
+    flex-direction: row;
+  }
+
+  .sidebar a {
+    padding: 6px 10px;
+    color: var(--muted);
+    font-weight: 600;
+  }
+
+  .sidebar-footer {
+    margin: 0 0 0 auto;
+    border: 0;
+    padding: 0;
+  }
+
+  .main-content {
+    padding: 14px 12px 40px;
+  }
+
+  .page-bar {
+    margin: -14px -12px 14px;
+    padding: 12px 12px 10px;
+  }
+
+  th,
+  td {
+    padding: 10px 12px;
+  }
 }
 
 .agenda-hourgrid {

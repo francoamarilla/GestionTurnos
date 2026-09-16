@@ -1,0 +1,80 @@
+/* ---------------------------------------------------------------------
+   Design tokens — copied verbatim from Mockups/agenda-mockup.html.
+   The mockups are the source of truth: when a mockup changes its :root,
+   update this file, not the component rules.
+   Dark mode follows the OS unless <html data-theme="light|dark"> forces it.
+--------------------------------------------------------------------- */
+:root {
+  --paper: #F4EDE2;
+  --surface: #FFFFFF;
+  --surface-2: #FBF7F1;
+  --border: #E3D9CA;
+  --border-strong: #D2C4B0;
+  --ink: #241B16;
+  --muted: #7A6A5F;
+  --brick: #9C3D22;
+  --brick-soft: #F3E2DB;
+  --pine: #2F6B4F;
+  --pine-soft: #E4EEE7;
+  --amber: #8A6516;
+  --amber-soft: #F5EBD5;
+  --slate: #8C8279;
+  --slate-soft: #EDE8E1;
+  --shadow: 0 1px 2px rgba(36, 27, 22, .06);
+  --shadow-lift: 0 12px 32px rgba(36, 27, 22, .14);
+  --r: 10px;
+  /* Agenda grid geometry (used by the agenda screen). */
+  --slot-h: 54px;
+  --gutter-w: 62px;
+  color-scheme: light;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --paper: #17120F;
+    --surface: #201A16;
+    --surface-2: #191411;
+    --border: #342B24;
+    --border-strong: #463A31;
+    --ink: #F2E9E0;
+    --muted: #A6968A;
+    --brick: #D4622F;
+    --brick-soft: #3A2018;
+    --pine: #7FC0A0;
+    --pine-soft: #17291F;
+    --amber: #D4A73F;
+    --amber-soft: #2C2314;
+    --slate: #9A8F86;
+    --slate-soft: #26201C;
+    --shadow: 0 1px 2px rgba(0, 0, 0, .4);
+    --shadow-lift: 0 12px 32px rgba(0, 0, 0, .5);
+    color-scheme: dark;
+  }
+}
+
+:root[data-theme="dark"] {
+  --paper: #17120F;
+  --surface: #201A16;
+  --surface-2: #191411;
+  --border: #342B24;
+  --border-strong: #463A31;
+  --ink: #F2E9E0;
+  --muted: #A6968A;
+  --brick: #D4622F;
+  --brick-soft: #3A2018;
+  --pine: #7FC0A0;
+  --pine-soft: #17291F;
+  --amber: #D4A73F;
+  --amber-soft: #2C2314;
+  --slate: #9A8F86;
+  --slate-soft: #26201C;
+  --shadow: 0 1px 2px rgba(0, 0, 0, .4);
+  --shadow-lift: 0 12px 32px rgba(0, 0, 0, .5);
+  color-scheme: dark;
+}
+
+@media (max-width: 900px) {
+  :root {
+    --slot-h: 50px;
+  }
+}
