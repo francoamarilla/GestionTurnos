@@ -652,62 +652,729 @@ tr.off {
   }
 }
 
-.agenda-hourgrid {
-  display: grid;
-  gap: 1px;
-  background: var(--color-border);
-  border: 1px solid var(--color-border);
-  border-radius: var(--radius-card);
-  margin-top: 16px;
-  max-height: 65vh;
-  overflow: auto;
+/* ---------------------------------------------------------------------
+   Shared: dialogs (mockup .sheet on native <dialog>), form bits used in
+   them, key/value lists, toast.
+--------------------------------------------------------------------- */
+.muted {
+  color: var(--muted);
 }
 
-.agenda-hourgrid-header {
-  background: var(--color-bg-page);
-  padding: 10px;
+dialog.sheet {
+  padding: 0;
+  width: calc(100% - 40px);
+  margin: max(24px, 6vh) auto auto;
+  background: var(--surface);
+  color: var(--ink);
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  box-shadow: var(--shadow-lift);
+  overflow: visible;
+}
+
+dialog.sheet[open] {
+  display: flex;
+  flex-direction: column;
+  max-height: calc(100svh - 2 * max(24px, 6vh));
+}
+
+dialog.sheet::backdrop {
+  background: color-mix(in srgb, var(--ink) 42%, transparent);
+}
+
+.sheet header {
+  padding: 18px 22px 14px;
+  border-bottom: 1px solid var(--border);
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+}
+
+.sheet header h2 {
+  font-size: 17px;
+}
+
+.sheet header p {
+  margin: 3px 0 0;
+  font-size: 13px;
+  color: var(--muted);
+}
+
+.sheet header button {
+  margin-left: auto;
+}
+
+.sheet-content {
+  overflow-y: auto;
+  padding: 18px 22px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.sheet-content .error-text {
+  margin: 0;
+}
+
+.sheet footer {
+  padding: 14px 22px;
+  border-top: 1px solid var(--border);
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 9px;
+  background: var(--surface-2);
+  border-radius: 0 0 14px 14px;
+}
+
+.field > label {
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.field .help {
+  font-size: 12px;
+  font-weight: 400;
+  color: var(--muted);
+}
+
+.field select,
+select.select {
+  appearance: none;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 12 12'%3E%3Cpath d='M3 5l3 3 3-3' fill='none' stroke='%237A6A5F' stroke-width='1.6'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 11px center;
+  background-size: 12px;
+  padding-right: 32px;
+}
+
+select.select {
+  border: 1px solid var(--border-strong);
+  background-color: var(--surface);
+  border-radius: 9px;
+  padding: 8px 30px 8px 12px;
+  font-size: 13.5px;
+  color: var(--ink);
+}
+
+.combo {
+  position: relative;
+}
+
+.combo input {
+  width: 100%;
+}
+
+.combo-list {
+  position: absolute;
+  top: calc(100% + 4px);
+  left: 0;
+  right: 0;
+  background: var(--surface);
+  border: 1px solid var(--border-strong);
+  border-radius: 10px;
+  box-shadow: var(--shadow-lift);
+  max-height: 206px;
+  overflow: auto;
+  z-index: 3;
+}
+
+.combo-list button {
+  display: flex;
+  justify-content: flex-start;
+  width: 100%;
+  gap: 10px;
+  border: 0;
+  border-bottom: 1px solid var(--border);
+  border-radius: 0;
+  background: none;
+  color: var(--ink);
+  padding: 9px 12px;
   text-align: left;
+  font-weight: 400;
+}
+
+.combo-list button:last-child {
+  border-bottom: 0;
+}
+
+.combo-list button:hover:not(:disabled),
+.combo-list button.hl {
+  filter: none;
+  background: var(--brick-soft);
+}
+
+.combo-list b {
+  font-size: 13.5px;
+  font-weight: 600;
+}
+
+.combo-list small {
+  color: var(--muted);
+  font-size: 12px;
+  margin-left: auto;
+}
+
+.combo-list .new {
+  color: var(--brick);
+  font-weight: 600;
+  font-size: 13.5px;
+}
+
+.chip-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 7px;
+}
+
+.slotlabel {
+  font-size: 12px;
+  color: var(--muted);
+  margin: 2px 0 6px;
+}
+
+button.chip {
+  border: 1px solid var(--border-strong);
+  background: var(--surface);
+  color: var(--ink);
+  border-radius: 8px;
+  padding: 6px 11px;
+  font-weight: 500;
+}
+
+button.chip:hover:not(:disabled) {
+  filter: none;
+  border-color: var(--brick);
+  color: var(--brick);
+}
+
+button.chip[aria-pressed="true"] {
+  background: var(--brick);
+  border-color: var(--brick);
+  color: #fff;
+  font-weight: 600;
+}
+
+.summary {
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 12px 14px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 13.5px;
+}
+
+.summary b {
+  font-weight: 700;
+}
+
+.summary .price {
+  margin-left: auto;
+  font-size: 16px;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+}
+
+.summary.empty {
+  color: var(--muted);
+}
+
+.statebar {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.kv {
+  display: grid;
+  grid-template-columns: 96px 1fr;
+  gap: 8px 12px;
+  font-size: 13.5px;
+  margin: 0;
+}
+
+.kv dt {
+  color: var(--muted);
+}
+
+.kv dd {
+  margin: 0;
+  font-weight: 500;
+}
+
+.toast {
+  position: fixed;
+  left: 50%;
+  bottom: 26px;
+  transform: translate(-50%, 16px);
+  background: var(--ink);
+  color: var(--paper);
+  padding: 11px 16px;
+  border-radius: 10px;
+  font-size: 13.5px;
+  font-weight: 500;
+  box-shadow: var(--shadow-lift);
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.18s, transform 0.18s;
+  z-index: 60;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.toast.show {
+  opacity: 1;
+  transform: translate(-50%, 0);
+  pointer-events: auto;
+}
+
+.toast button {
+  border: 0;
+  background: none;
+  color: var(--paper);
+  text-decoration: underline;
+  padding: 0;
+}
+
+/* ---------------------------------------------------------------------
+   Agenda (Mockups/agenda-mockup.html): full-height page, day toolbar,
+   hourly board with one column per professional.
+--------------------------------------------------------------------- */
+.main-content:has(> .agenda-page) {
+  padding: 0;
+  overflow: hidden;
+}
+
+.agenda-page {
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+
+.agenda-page .page-bar {
+  margin: 0;
+  padding: 16px 22px 12px;
+}
+
+.agenda-message {
+  padding: 16px 22px;
+}
+
+.agenda-notice {
+  margin: 0 22px 11px;
+  padding: 9px 14px;
+  border-radius: 9px;
+  background: var(--amber-soft);
+  color: var(--amber);
+  font-size: 13px;
+}
+
+.daynav {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 9px;
+  padding: 2px;
+}
+
+.daynav button {
+  background: none;
+  border: 0;
+  width: 30px;
+  height: 30px;
+  padding: 0;
+  border-radius: 7px;
+  color: var(--muted);
+}
+
+.daynav button:hover:not(:disabled) {
+  filter: none;
+  background: var(--brick-soft);
+  color: var(--brick);
+}
+
+.daynav .today {
+  width: auto;
+  padding: 0 11px;
+  font-size: 13px;
+  color: var(--ink);
+  border-left: 1px solid var(--border);
+  border-radius: 0 7px 7px 0;
+}
+
+.dateline {
+  position: relative;
+  font-size: 15px;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+  min-width: 168px;
+  cursor: pointer;
+}
+
+.dateline em {
+  font-style: normal;
+  color: var(--muted);
+  font-weight: 500;
+}
+
+.dateline-picker {
+  position: absolute;
+  inset: 0;
+  opacity: 0;
+  cursor: pointer;
+}
+
+.legend {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 11px 22px;
+  flex-wrap: wrap;
+}
+
+.legend span {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12.5px;
+  color: var(--muted);
+}
+
+.legend i {
+  width: 9px;
+  height: 9px;
+  border-radius: 3px;
+  display: block;
+}
+
+.legend .hint {
+  margin-left: auto;
+}
+
+kbd {
+  font: inherit;
+  font-size: 11.5px;
+  border: 1px solid var(--border-strong);
+  border-bottom-width: 2px;
+  border-radius: 5px;
+  padding: 1px 5px;
+  background: var(--surface);
+}
+
+.board {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+  position: relative;
+  padding: 0 22px 26px;
+}
+
+.cols {
+  display: grid;
+  min-width: max-content;
+}
+
+.hcell {
   position: sticky;
   top: 0;
+  z-index: 6;
+  background: var(--paper);
+  padding: 10px 12px 12px;
+  border-bottom: 1px solid var(--border-strong);
+}
+
+.hcell.gut {
+  z-index: 7;
+  left: 0;
+}
+
+.pro {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+}
+
+.pro .dot {
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  flex: none;
+}
+
+.pro b {
+  font-size: 14px;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+}
+
+.pro small {
+  display: block;
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.gutter {
+  position: sticky;
+  left: 0;
+  z-index: 4;
+  background: var(--paper);
+  width: var(--gutter-w);
+}
+
+.tick {
+  height: var(--slot-h);
+  position: relative;
+  border-right: 1px solid var(--border);
+}
+
+.tick span {
+  position: absolute;
+  right: 9px;
+  top: -7px;
+  font-size: 11.5px;
+  color: var(--muted);
+  background: var(--paper);
+  padding: 0 2px;
+}
+
+.tick:first-child span {
+  top: 2px;
+}
+
+.tick.half span {
+  opacity: 0.55;
+  font-size: 11px;
+}
+
+.col {
+  position: relative;
+  border-right: 1px solid var(--border);
+  background: var(--surface);
+}
+
+.col:last-child {
+  border-right: 0;
+}
+
+.slot {
+  height: var(--slot-h);
+  border-bottom: 1px solid var(--border);
+  position: relative;
+}
+
+.slot.half {
+  border-bottom-style: dashed;
+  border-bottom-color: color-mix(in srgb, var(--border) 60%, transparent);
+}
+
+.slot.closed {
+  background: repeating-linear-gradient(
+    135deg,
+    transparent,
+    transparent 6px,
+    color-mix(in srgb, var(--slate) 9%, transparent) 6px,
+    color-mix(in srgb, var(--slate) 9%, transparent) 7px
+  );
+}
+
+.slot button {
+  position: absolute;
+  inset: 2px;
+  border: 0;
+  background: none;
+  border-radius: 7px;
+  gap: 5px;
+  font-size: 12.5px;
+  color: var(--brick);
+  opacity: 0;
+}
+
+.slot button:hover:not(:disabled),
+.slot button:focus-visible {
+  filter: none;
+  opacity: 1;
+  background: var(--brick-soft);
+  outline-offset: -2px;
+}
+
+button.appt {
+  position: absolute;
+  left: 5px;
+  right: 5px;
+  width: calc(100% - 10px);
+  display: block;
+  border-radius: 9px;
+  padding: 7px 9px;
+  border: 1px solid;
+  border-left-width: 4px;
+  text-align: left;
+  overflow: hidden;
+  background: var(--surface);
+  color: var(--ink);
+  font-weight: 400;
+  white-space: normal;
+  z-index: 2;
+}
+
+button.appt:hover:not(:disabled) {
+  filter: none;
+  box-shadow: var(--shadow-lift);
+  z-index: 5;
+}
+
+.appt span {
+  display: block;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.appt .t {
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+}
+
+.appt .s {
+  font-size: 13px;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+}
+
+.appt .c {
+  font-size: 12.5px;
+  color: var(--muted);
+}
+
+button.appt.short {
+  padding: 4px 9px;
+  display: flex;
+  align-items: center;
+  gap: 7px;
+}
+
+.appt.short .t {
+  flex: none;
+}
+
+.appt.short .c {
+  margin-left: auto;
+}
+
+.appt.confirmado {
+  border-color: var(--brick);
+  background: color-mix(in srgb, var(--brick-soft) 60%, var(--surface));
+}
+
+.appt.confirmado .t {
+  color: var(--brick);
+}
+
+.appt.completado {
+  border-color: var(--pine);
+  background: color-mix(in srgb, var(--pine-soft) 60%, var(--surface));
+}
+
+.appt.completado .t {
+  color: var(--pine);
+}
+
+.appt.noshow {
+  border-color: var(--amber);
+  background: color-mix(in srgb, var(--amber-soft) 60%, var(--surface));
+}
+
+.appt.noshow .t {
+  color: var(--amber);
+}
+
+.appt.cancelado {
+  border-color: var(--slate);
+  border-left-style: dashed;
+  background: var(--slate-soft);
+  opacity: 0.72;
+  /* A rebooked slot's live appointment stays on top. */
   z-index: 1;
 }
 
-.agenda-hourgrid-header > div {
-  font-size: var(--text-card-size);
-  font-weight: 500;
-  margin-bottom: 6px;
+.appt.cancelado .s {
+  text-decoration: line-through;
 }
 
-.agenda-hourgrid-time {
-  background: var(--color-surface);
-  padding: 4px 10px;
-  font-size: var(--text-caption-size);
-  color: var(--color-text-secondary);
-  text-align: right;
+.appt.cancelado .t {
+  color: var(--slate);
 }
 
-.agenda-hourgrid-cell {
-  background: var(--color-surface);
+.now {
+  position: absolute;
+  left: 0;
+  right: 0;
+  height: 0;
+  border-top: 2px solid var(--brick);
+  z-index: 3;
+  pointer-events: none;
 }
 
-.appointment-card {
-  height: 100%;
-  border: 1px solid var(--color-border);
-  border-radius: var(--radius-control);
-  padding: 6px 8px;
-  font-size: var(--text-caption-size);
-  background: var(--color-surface);
-  overflow: auto;
+.now::before {
+  content: "";
+  position: absolute;
+  left: -4px;
+  top: -5px;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--brick);
 }
 
-.slot-grid {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
+.nowlabel {
+  position: absolute;
+  right: 4px;
+  z-index: 8;
+  transform: translateY(-50%);
+  background: var(--brick);
+  color: #fff;
+  font-size: 11px;
+  font-weight: 700;
+  padding: 1px 6px;
+  border-radius: 5px;
+  pointer-events: none;
 }
 
-.slot-grid button {
-  padding: 7px 12px;
+@media (max-width: 900px) {
+  .agenda-page .page-bar {
+    padding: 12px 16px 10px;
+  }
+
+  .agenda-page .page-bar h1 {
+    display: none;
+  }
+
+  .legend {
+    padding: 10px 16px;
+  }
+
+  .legend .hint {
+    display: none;
+  }
+
+  .board {
+    padding: 0 0 22px;
+  }
+
+  .dateline {
+    min-width: 0;
+    font-size: 14px;
+  }
+
+  .agenda-notice {
+    margin: 0 16px 10px;
+  }
 }
 
 .alert-banner {

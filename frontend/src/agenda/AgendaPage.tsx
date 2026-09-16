@@ -1,557 +1,365 @@
-import { useEffect, useState } from "react";
-import { api, ApiError } from "../api/client";
-import { AppointmentStatusBadge } from "../components/Badge";
+import { useEffect, useRef, useState, type CSSProperties } from "react";
+import { ApiError } from "../api/client";
+import { useToast } from "../components/Toast";
+import { AppointmentDetailDialog, NewAppointmentDialog } from "./AppointmentDialogs";
+import {
+  addDays,
+  customerLabel,
+  dayWindow,
+  loadAppointments,
+  loadCatalog,
+  longDate,
+  nowInZone,
+  PROFESSIONAL_COLORS,
+  STATUS_CLASS,
+  timeOf,
+  toMinutes,
+  toTime,
+  type Appointment,
+  type Catalog,
+} from "./model";
 
-interface ProfessionalResponse {
-  id: string;
-  name: string;
-  active: boolean;
-}
+const STEP = 30;
+// ponytail: grid window for a day the branch has no hours (closed or no
+// row) - keeps the board readable; booking is still refused server-side.
+const FALLBACK_WINDOW = { open: 9 * 60, close: 20 * 60 };
 
-interface NamedEntity {
-  id: string;
-  name: string;
-}
-
-interface CustomerOption {
-  id: string;
-  name: string | null;
-  phone: string | null;
-}
-
-interface AppointmentResponse {
-  id: string;
-  professionalId: string;
-  serviceId: string;
-  customerId: string | null;
-  startTime: string;
-  durationMinutes: number;
-  price: number;
-  status: "CONFIRMED" | "COMPLETED" | "CANCELLED" | "NO_SHOW";
-}
-
-interface Page<T> {
-  content: T[];
-}
-
-type DayOfWeek = "MONDAY" | "TUESDAY" | "WEDNESDAY" | "THURSDAY" | "FRIDAY" | "SATURDAY" | "SUNDAY";
-
-interface DaySchedule {
-  dayOfWeek: DayOfWeek;
-  openTime: string | null;
-  closeTime: string | null;
-  closed: boolean;
-}
-
-interface EstablishmentResponse {
-  schedule: DaySchedule[];
-}
-
-interface AgendaData {
-  professionals: ProfessionalResponse[];
-  services: NamedEntity[];
-  customers: CustomerOption[];
-  appointments: AppointmentResponse[];
-  schedule: DaySchedule[];
-}
-
-function toIsoDate(date: Date): string {
-  const y = date.getFullYear();
-  const m = String(date.getMonth() + 1).padStart(2, "0");
-  const d = String(date.getDate()).padStart(2, "0");
-  return `${y}-${m}-${d}`;
-}
-
-function addDays(iso: string, days: number): string {
-  const [y, m, d] = iso.split("-").map(Number);
-  const date = new Date(y, m - 1, d + days);
-  return toIsoDate(date);
-}
-
-function formatTime(iso: string): string {
-  return iso.slice(11, 16);
-}
-
-function customerLabel(customer: CustomerOption | undefined): string {
-  if (!customer) return "Sin cliente";
-  return customer.name ?? customer.phone ?? "Sin cliente";
-}
-
-const DAY_OF_WEEK_BY_JS_INDEX: DayOfWeek[] = [
-  "SUNDAY",
-  "MONDAY",
-  "TUESDAY",
-  "WEDNESDAY",
-  "THURSDAY",
-  "FRIDAY",
-  "SATURDAY",
-];
-
-function dayOfWeekFromIso(iso: string): DayOfWeek {
-  const [y, m, d] = iso.split("-").map(Number);
-  return DAY_OF_WEEK_BY_JS_INDEX[new Date(y, m - 1, d).getDay()];
-}
-
-function timeToMinutes(time: string): number {
-  const [h, m] = time.slice(0, 5).split(":").map(Number);
-  return h * 60 + m;
-}
-
-function minutesToTime(minutes: number): string {
-  const h = String(Math.floor(minutes / 60)).padStart(2, "0");
-  const m = String(minutes % 60).padStart(2, "0");
-  return `${h}:${m}`;
-}
-
-const SLOT_MINUTES = 30;
-// ponytail: fallback window for a day with no establishment schedule row
-// (or explicitly closed) - keeps the grid usable instead of empty; actual
-// booking availability is still enforced server-side regardless of this.
-const FALLBACK_OPEN_TIME = "09:00";
-const FALLBACK_CLOSE_TIME = "20:00";
-
-async function loadAgenda(date: string): Promise<AgendaData> {
-  const [professionalsPage, services, customersPage, appointments, establishment] = await Promise.all([
-    api.get<Page<ProfessionalResponse>>("/professionals?active=true&size=100"),
-    api.get<NamedEntity[]>("/services"),
-    // ponytail: one page of up to 200 customers for the booking dropdown -
-    // fine for this MVP's scale, same ceiling used elsewhere; the Customers
-    // screen's search is the real way to find someone in a bigger base.
-    api.get<Page<CustomerOption>>("/customers?size=200"),
-    api.get<AppointmentResponse[]>(`/appointments?from=${date}&to=${date}`),
-    api.get<EstablishmentResponse>("/establishment"),
-  ]);
+// top/height in slot units, scaled by the --slot-h token.
+function slotBox(fromMinutes: number, lengthMinutes: number, inset = 0): CSSProperties {
   return {
-    professionals: professionalsPage.content,
-    services,
-    customers: customersPage.content,
-    appointments: appointments.sort((a, b) => a.startTime.localeCompare(b.startTime)),
-    schedule: establishment.schedule,
+    top: `calc(var(--slot-h) * ${fromMinutes / STEP} + ${inset}px)`,
+    height: `calc(var(--slot-h) * ${lengthMinutes / STEP} - ${inset * 2}px)`,
   };
 }
 
-function BookingForm({
-  date,
-  professional,
-  services,
-  customers,
-  onCancel,
-  onBooked,
-}: {
-  date: string;
-  professional: ProfessionalResponse;
-  services: NamedEntity[];
-  customers: CustomerOption[];
-  onCancel: () => void;
-  onBooked: () => void;
-}) {
-  const [serviceId, setServiceId] = useState(services[0]?.id ?? "");
-  // Keyed by the query that produced them, so a service/date change makes
-  // stale slots (and any slot selected from them) disappear as soon as the
-  // key no longer matches, without a separate reset call in the effect.
-  const [slotsResult, setSlotsResult] = useState<{ key: string; slots: string[] } | null>(null);
-  const [selectedSlot, setSelectedSlot] = useState<string | null>(null);
-  const [customerId, setCustomerId] = useState("");
-  const [error, setError] = useState<string | null>(null);
-  const [submitting, setSubmitting] = useState(false);
-
-  const slotsKey = `${professional.id}|${serviceId}|${date}`;
-  const slots = slotsResult?.key === slotsKey ? slotsResult.slots : null;
-  const effectiveSelectedSlot = slots?.includes(selectedSlot ?? "") ? selectedSlot : null;
-
-  useEffect(() => {
-    if (!serviceId) return;
-    api
-      .get<string[]>(`/availability?professionalId=${professional.id}&serviceId=${serviceId}&date=${date}`)
-      .then((result) => setSlotsResult({ key: slotsKey, slots: result }))
-      .catch((err) => setError(err instanceof ApiError ? err.message : "No se pudo cargar la disponibilidad."));
-  }, [slotsKey, serviceId, professional.id, date]);
-
-  async function submit() {
-    if (!effectiveSelectedSlot) return;
-    setSubmitting(true);
-    setError(null);
-    try {
-      await api.post("/appointments", {
-        professionalId: professional.id,
-        serviceId,
-        startTime: effectiveSelectedSlot,
-        customerId: customerId || null,
-      });
-      onBooked();
-    } catch (err) {
-      setError(err instanceof ApiError ? err.message : "No se pudo crear el turno.");
-    } finally {
-      setSubmitting(false);
-    }
-  }
-
-  return (
-    <div className="card" style={{ maxWidth: 480 }}>
-      <h2>Nuevo turno con {professional.name}</h2>
-      {error && <p className="error-text">{error}</p>}
-
-      <label className="field">
-        <span>Servicio</span>
-        <select value={serviceId} onChange={(e) => setServiceId(e.target.value)}>
-          {services.map((s) => (
-            <option key={s.id} value={s.id}>
-              {s.name}
-            </option>
-          ))}
-        </select>
-      </label>
-
-      <label className="field">
-        <span>Cliente (opcional)</span>
-        <select value={customerId} onChange={(e) => setCustomerId(e.target.value)}>
-          <option value="">Sin cliente</option>
-          {customers.map((c) => (
-            <option key={c.id} value={c.id}>
-              {customerLabel(c)}
-            </option>
-          ))}
-        </select>
-      </label>
-
-      <div className="field">
-        <span>Horario</span>
-        {slots === null ? (
-          <p>Cargando horarios...</p>
-        ) : slots.length === 0 ? (
-          <p>No hay horarios disponibles ese día.</p>
-        ) : (
-          <div className="slot-grid">
-            {slots.map((slot) => (
-              <button
-                key={slot}
-                type="button"
-                className={slot === effectiveSelectedSlot ? "" : "secondary"}
-                onClick={() => setSelectedSlot(slot)}
-              >
-                {formatTime(slot)}
-              </button>
-            ))}
-          </div>
-        )}
-      </div>
-
-      <div className="form-actions">
-        <button type="button" onClick={submit} disabled={!effectiveSelectedSlot || submitting}>
-          {submitting ? "Creando..." : "Crear turno"}
-        </button>
-        <button type="button" className="secondary" onClick={onCancel}>
-          Cancelar
-        </button>
-      </div>
-    </div>
-  );
-}
-
-function RescheduleForm({
-  appointment,
-  date,
-  onCancel,
-  onDone,
-}: {
-  appointment: AppointmentResponse;
-  date: string;
-  onCancel: () => void;
-  onDone: () => void;
-}) {
-  const [newDate, setNewDate] = useState(date);
-  const [slotsResult, setSlotsResult] = useState<{ key: string; slots: string[] } | null>(null);
-  const [selectedSlot, setSelectedSlot] = useState<string | null>(null);
-  const [error, setError] = useState<string | null>(null);
-  const [submitting, setSubmitting] = useState(false);
-
-  const slotsKey = `${appointment.professionalId}|${appointment.serviceId}|${newDate}`;
-  const slots = slotsResult?.key === slotsKey ? slotsResult.slots : null;
-  const effectiveSelectedSlot = slots?.includes(selectedSlot ?? "") ? selectedSlot : null;
-
-  useEffect(() => {
-    api
-      .get<string[]>(
-        `/availability?professionalId=${appointment.professionalId}&serviceId=${appointment.serviceId}&date=${newDate}`,
-      )
-      .then((result) => setSlotsResult({ key: slotsKey, slots: result }))
-      .catch((err) => setError(err instanceof ApiError ? err.message : "No se pudo cargar la disponibilidad."));
-  }, [slotsKey, appointment.professionalId, appointment.serviceId, newDate]);
-
-  async function submit() {
-    if (!effectiveSelectedSlot) return;
-    setSubmitting(true);
-    setError(null);
-    try {
-      await api.post(`/appointments/${appointment.id}/reschedule`, { startTime: effectiveSelectedSlot });
-      onDone();
-    } catch (err) {
-      setError(err instanceof ApiError ? err.message : "No se pudo reprogramar el turno.");
-    } finally {
-      setSubmitting(false);
-    }
-  }
-
-  return (
-    <div className="card" style={{ maxWidth: 480 }}>
-      <h2>Reprogramar turno</h2>
-      {error && <p className="error-text">{error}</p>}
-
-      <label className="field">
-        <span>Nueva fecha</span>
-        <input type="date" value={newDate} onChange={(e) => setNewDate(e.target.value)} />
-      </label>
-
-      <div className="field">
-        <span>Horario</span>
-        {slots === null ? (
-          <p>Cargando horarios...</p>
-        ) : slots.length === 0 ? (
-          <p>No hay horarios disponibles ese día.</p>
-        ) : (
-          <div className="slot-grid">
-            {slots.map((slot) => (
-              <button
-                key={slot}
-                type="button"
-                className={slot === effectiveSelectedSlot ? "" : "secondary"}
-                onClick={() => setSelectedSlot(slot)}
-              >
-                {formatTime(slot)}
-              </button>
-            ))}
-          </div>
-        )}
-      </div>
-
-      <div className="form-actions">
-        <button type="button" onClick={submit} disabled={!effectiveSelectedSlot || submitting}>
-          {submitting ? "Guardando..." : "Confirmar"}
-        </button>
-        <button type="button" className="secondary" onClick={onCancel}>
-          Cancelar
-        </button>
-      </div>
-    </div>
-  );
-}
-
-function AppointmentCard({
-  appointment,
-  serviceName,
-  customer,
-  onChanged,
-  onReschedule,
-}: {
-  appointment: AppointmentResponse;
-  serviceName: string;
-  customer: CustomerOption | undefined;
-  onChanged: () => void;
-  onReschedule: () => void;
-}) {
-  const [error, setError] = useState<string | null>(null);
-  const [busy, setBusy] = useState(false);
-
-  async function setStatus(status: string) {
-    setBusy(true);
-    setError(null);
-    try {
-      await api.patch(`/appointments/${appointment.id}/status`, { status });
-      onChanged();
-    } catch (err) {
-      setError(err instanceof ApiError ? err.message : "No se pudo actualizar el turno.");
-      setBusy(false);
-    }
-  }
-
-  return (
-    <div className="appointment-card">
-      <strong>{formatTime(appointment.startTime)}</strong> {serviceName}
-      <br />
-      {customerLabel(customer)}
-      <br />
-      <AppointmentStatusBadge status={appointment.status} />
-      {error && <p className="error-text">{error}</p>}
-      {appointment.status === "CONFIRMED" && (
-        <div className="form-actions">
-          <button type="button" className="secondary" disabled={busy} onClick={() => setStatus("COMPLETED")}>
-            Completado
-          </button>
-          <button type="button" className="secondary" disabled={busy} onClick={() => setStatus("NO_SHOW")}>
-            No asistió
-          </button>
-          <button type="button" className="secondary" disabled={busy} onClick={onReschedule}>
-            Reprogramar
-          </button>
-          <button type="button" className="secondary" disabled={busy} onClick={() => setStatus("CANCELLED")}>
-            Cancelar
-          </button>
-        </div>
-      )}
-    </div>
-  );
-}
+type DialogState =
+  | { kind: "new"; professionalId?: string; minutes?: number }
+  | { kind: "detail"; appointment: Appointment }
+  | null;
 
 export default function AgendaPage() {
-  const [date, setDate] = useState(toIsoDate(new Date()));
-  const [data, setData] = useState<AgendaData | null>(null);
+  const showToast = useToast();
+  const [catalog, setCatalog] = useState<Catalog | null>(null);
+  const [date, setDate] = useState<string | null>(null);
+  const [appointments, setAppointments] = useState<{ date: string; list: Appointment[] } | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [bookingFor, setBookingFor] = useState<ProfessionalResponse | null>(null);
-  const [rescheduling, setRescheduling] = useState<AppointmentResponse | null>(null);
+  const [filter, setFilter] = useState("all");
+  const [dialog, setDialog] = useState<DialogState>(null);
+  const [now, setNow] = useState<{ date: string; minutes: number } | null>(null);
+  const boardRef = useRef<HTMLDivElement>(null);
+  const scrolledFor = useRef<string | null>(null);
 
-  function reload() {
-    loadAgenda(date)
+  function loadAll() {
+    loadCatalog()
       .then((result) => {
-        // Same class of bug as HomeDashboard's stale error: this component
-        // stays mounted across date changes, so a transient failure on one
-        // date must not keep masking every later successful load.
         setError(null);
-        setData(result);
+        setCatalog(result);
+        const current = nowInZone(result.timezone);
+        setNow(current);
+        setDate((d) => d ?? current.date);
       })
       .catch((err) => setError(err instanceof ApiError ? err.message : "No se pudo cargar la agenda."));
   }
 
-  useEffect(reload, [date]);
+  function reloadDay(day: string) {
+    loadAppointments(day)
+      .then((list) => {
+        setError(null);
+        setAppointments({ date: day, list });
+      })
+      .catch((err) => setError(err instanceof ApiError ? err.message : "No se pudieron cargar los turnos."));
+  }
 
-  if (bookingFor && data) {
+  useEffect(loadAll, []);
+
+  useEffect(() => {
+    if (date) reloadDay(date);
+  }, [date]);
+
+  // Keep the "now" line moving.
+  useEffect(() => {
+    if (!catalog) return;
+    const timer = window.setInterval(() => setNow(nowInZone(catalog.timezone)), 60_000);
+    return () => window.clearInterval(timer);
+  }, [catalog]);
+
+  // "n" opens a new appointment (mockup shortcut).
+  useEffect(() => {
+    function onKey(e: KeyboardEvent) {
+      const tag = (e.target as HTMLElement).tagName;
+      if (e.key !== "n" || dialog || e.ctrlKey || e.metaKey || e.altKey) return;
+      if (["INPUT", "SELECT", "TEXTAREA"].includes(tag)) return;
+      e.preventDefault();
+      setDialog({ kind: "new" });
+    }
+    document.addEventListener("keydown", onKey);
+    return () => document.removeEventListener("keydown", onKey);
+  }, [dialog]);
+
+  const list = appointments && appointments.date === date ? appointments.list : null;
+  const isToday = !!now && now.date === date;
+  const branchWindow = catalog && date ? dayWindow(catalog.branchSchedule, date) : null;
+  const window_ = branchWindow ?? FALLBACK_WINDOW;
+
+  // Scroll the board to "now" once per day shown.
+  useEffect(() => {
+    if (!list || !date || scrolledFor.current === date || !boardRef.current) return;
+    scrolledFor.current = date;
+    const slotH = parseFloat(getComputedStyle(boardRef.current).getPropertyValue("--slot-h")) || 54;
+    boardRef.current.scrollTop =
+      isToday && now ? Math.max(0, ((now.minutes - window_.open) / STEP) * slotH - 200) : 0;
+  }, [list, date, isToday, now, window_.open]);
+
+  if (error && !catalog) {
     return (
-      <div>
-        <h1>Agenda</h1>
-        <BookingForm
-          date={date}
-          professional={bookingFor}
-          services={data.services}
-          customers={data.customers}
-          onCancel={() => setBookingFor(null)}
-          onBooked={() => {
-            setBookingFor(null);
-            reload();
-          }}
-        />
+      <div className="agenda-page">
+        <div className="page-bar">
+          <h1>Agenda</h1>
+        </div>
+        <div className="agenda-message">
+          <p className="error-text">{error}</p>
+          <button type="button" onClick={loadAll}>
+            Reintentar
+          </button>
+        </div>
       </div>
     );
   }
 
-  if (rescheduling) {
+  if (!catalog || !date) {
     return (
-      <div>
-        <h1>Agenda</h1>
-        <RescheduleForm
-          appointment={rescheduling}
-          date={date}
-          onCancel={() => setRescheduling(null)}
-          onDone={() => {
-            setRescheduling(null);
-            reload();
-          }}
-        />
+      <div className="agenda-page">
+        <div className="page-bar">
+          <h1>Agenda</h1>
+        </div>
+        <p className="agenda-message muted">Cargando…</p>
       </div>
     );
   }
+
+  const closure = catalog.closures.find((c) => c.date === date);
+  const professionals = catalog.professionals.filter((p) => filter === "all" || p.id === filter);
+  const rows = Math.max(1, Math.ceil((window_.close - window_.open) / STEP));
+  const nowOffset = isToday && now ? now.minutes - window_.open : null;
+  const showNow = nowOffset !== null && nowOffset >= 0 && nowOffset <= rows * STEP;
 
   return (
-    <div>
-      <h1>Agenda</h1>
-      {error && <p className="error-text">{error}</p>}
-
-      <div className="form-actions">
-        <button type="button" className="secondary" onClick={() => setDate((d) => addDays(d, -1))}>
-          Día anterior
-        </button>
-        <input type="date" value={date} onChange={(e) => setDate(e.target.value)} />
-        <button type="button" className="secondary" onClick={() => setDate((d) => addDays(d, 1))}>
-          Día siguiente
+    <div className="agenda-page">
+      <div className="page-bar">
+        <h1>Agenda</h1>
+        <div className="daynav">
+          <button type="button" title="Día anterior" aria-label="Día anterior" onClick={() => setDate(addDays(date, -1))}>
+            <svg viewBox="0 0 24 24" aria-hidden="true">
+              <path d="M15 5l-7 7 7 7" />
+            </svg>
+          </button>
+          <button type="button" title="Día siguiente" aria-label="Día siguiente" onClick={() => setDate(addDays(date, 1))}>
+            <svg viewBox="0 0 24 24" aria-hidden="true">
+              <path d="M9 5l7 7-7 7" />
+            </svg>
+          </button>
+          <button type="button" className="today" onClick={() => now && setDate(now.date)}>
+            Hoy
+          </button>
+        </div>
+        <label className="dateline">
+          {longDate(date)}
+          {isToday && <em> · hoy</em>}
+          <input
+            type="date"
+            className="dateline-picker"
+            aria-label="Elegir fecha"
+            value={date}
+            onClick={(e) => e.currentTarget.showPicker?.()}
+            onChange={(e) => e.target.value && setDate(e.target.value)}
+          />
+        </label>
+        <span className="spacer" />
+        {catalog.professionals.length > 1 && (
+          <select
+            className="select"
+            aria-label="Filtrar profesional"
+            value={filter}
+            onChange={(e) => setFilter(e.target.value)}
+          >
+            <option value="all">Todos los profesionales</option>
+            {catalog.professionals.map((p) => (
+              <option key={p.id} value={p.id}>
+                {p.name}
+              </option>
+            ))}
+          </select>
+        )}
+        <button type="button" onClick={() => setDialog({ kind: "new" })} disabled={catalog.professionals.length === 0}>
+          <svg viewBox="0 0 24 24" aria-hidden="true">
+            <path d="M12 5v14M5 12h14" />
+          </svg>
+          Nuevo turno
         </button>
       </div>
 
-      {data === null ? (
-        <p>Cargando...</p>
-      ) : data.professionals.length === 0 ? (
-        <p>No hay profesionales activos.</p>
+      <div className="legend">
+        <span>
+          <i style={{ background: "var(--brick)" }} />
+          Confirmado
+        </span>
+        <span>
+          <i style={{ background: "var(--pine)" }} />
+          Completado
+        </span>
+        <span>
+          <i style={{ background: "var(--amber)" }} />
+          No asistió
+        </span>
+        <span>
+          <i style={{ background: "var(--slate)" }} />
+          Cancelado
+        </span>
+        <span className="hint">
+          Tocá un espacio libre para agendar ahí · <kbd>N</kbd> nuevo turno
+        </span>
+      </div>
+
+      {error && <p className="agenda-message error-text">{error}</p>}
+      {closure ? (
+        <p className="agenda-notice">
+          El local está cerrado este día{closure.reason ? ` (${closure.reason})` : ""}. No se pueden agendar turnos.
+        </p>
       ) : (
-        (() => {
-          const daySchedule = data.schedule.find((s) => s.dayOfWeek === dayOfWeekFromIso(date));
-          const isOpen = daySchedule && !daySchedule.closed && daySchedule.openTime && daySchedule.closeTime;
-          const openMinutes = timeToMinutes(isOpen ? daySchedule.openTime! : FALLBACK_OPEN_TIME);
-          const closeMinutes = timeToMinutes(isOpen ? daySchedule.closeTime! : FALLBACK_CLOSE_TIME);
-          const slotCount = Math.max(1, Math.ceil((closeMinutes - openMinutes) / SLOT_MINUTES));
-          const slotStarts = Array.from({ length: slotCount }, (_, i) => openMinutes + i * SLOT_MINUTES);
+        !branchWindow && <p className="agenda-notice">El local no abre este día. No se pueden agendar turnos.</p>
+      )}
 
-          return (
-            <>
-              {daySchedule?.closed && (
-                <p>El establecimiento está cerrado este día (mostrando de todos modos un horario de referencia).</p>
-              )}
-              <div
-                className="agenda-hourgrid"
-                style={{
-                  gridTemplateColumns: `64px repeat(${data.professionals.length}, minmax(180px, 1fr))`,
-                  gridTemplateRows: `auto repeat(${slotCount}, 76px)`,
-                }}
-              >
-                {data.professionals.map((professional, colIndex) => (
-                  <div
-                    key={professional.id}
-                    className="agenda-hourgrid-header"
-                    style={{ gridColumn: colIndex + 2, gridRow: 1 }}
-                  >
-                    <div>{professional.name}</div>
-                    <button type="button" onClick={() => setBookingFor(professional)}>
-                      Agregar turno
-                    </button>
-                  </div>
-                ))}
-
-                {slotStarts.map((minutes, rowIndex) => (
-                  <div
-                    key={minutes}
-                    className="agenda-hourgrid-time"
-                    style={{ gridColumn: 1, gridRow: rowIndex + 2 }}
-                  >
-                    {minutesToTime(minutes)}
-                  </div>
-                ))}
-
-                {data.professionals.map((professional, colIndex) =>
-                  slotStarts.map((minutes, rowIndex) => (
-                    <div
-                      key={`${professional.id}-${minutes}`}
-                      className="agenda-hourgrid-cell"
-                      style={{ gridColumn: colIndex + 2, gridRow: rowIndex + 2 }}
+      {catalog.professionals.length === 0 ? (
+        <p className="agenda-message muted">No hay profesionales activos. Agregalos en Profesionales.</p>
+      ) : (
+        <div className="board" ref={boardRef} aria-busy={!list}>
+          <div
+            className="cols"
+            style={{ gridTemplateColumns: `var(--gutter-w) repeat(${professionals.length}, minmax(190px, 1fr))` }}
+          >
+            <div className="hcell gut" />
+            {professionals.map((p) => {
+              const hours = dayWindow(catalog.schedules.get(p.id), date);
+              const count = list?.filter((a) => a.professionalId === p.id && a.status !== "CANCELLED").length ?? 0;
+              return (
+                <div key={p.id} className="hcell">
+                  <div className="pro">
+                    <span
+                      className="dot"
+                      style={{ background: PROFESSIONAL_COLORS[catalog.professionals.indexOf(p) % PROFESSIONAL_COLORS.length] }}
                     />
-                  )),
-                )}
+                    <div>
+                      <b>{p.name}</b>
+                      <small>
+                        {count} {count === 1 ? "turno" : "turnos"} ·{" "}
+                        {hours ? `${toTime(hours.open)} a ${toTime(hours.close)}` : "no trabaja"}
+                      </small>
+                    </div>
+                  </div>
+                </div>
+              );
+            })}
 
-                {data.professionals.map((professional, colIndex) =>
-                  data.appointments
-                    .filter((a) => a.professionalId === professional.id)
-                    .map((appt) => {
-                      const startMinutes = timeToMinutes(formatTime(appt.startTime));
-                      const rowStart = Math.min(
-                        Math.max(Math.floor((startMinutes - openMinutes) / SLOT_MINUTES) + 2, 2),
-                        slotCount + 1,
-                      );
-                      const rowSpan = Math.max(1, Math.round(appt.durationMinutes / SLOT_MINUTES));
+            <div className="gutter">
+              {Array.from({ length: rows }, (_, i) => {
+                const minutes = window_.open + i * STEP;
+                return (
+                  <div key={minutes} className={`tick${minutes % 60 ? " half" : ""}`}>
+                    <span>{toTime(minutes)}</span>
+                  </div>
+                );
+              })}
+              {showNow && (
+                <div className="nowlabel" style={{ top: `calc(var(--slot-h) * ${nowOffset! / STEP})` }}>
+                  {toTime(now!.minutes)}
+                </div>
+              )}
+            </div>
+
+            {professionals.map((p) => {
+              const hours = dayWindow(catalog.schedules.get(p.id), date);
+              const bookable = !closure && branchWindow;
+              return (
+                <div key={p.id} className="col">
+                  {Array.from({ length: rows }, (_, i) => {
+                    const minutes = window_.open + i * STEP;
+                    const closed = !hours || minutes < hours.open || minutes >= hours.close;
+                    const past = !!now && (date < now.date || (isToday && minutes + STEP <= now.minutes));
+                    return (
+                      <div key={minutes} className={`slot ${minutes % 60 ? "half" : "hour"}${closed ? " closed" : ""}`}>
+                        {!closed && bookable && !past && (
+                          <button
+                            type="button"
+                            aria-label={`Agendar a las ${toTime(minutes)} con ${p.name}`}
+                            onClick={() => setDialog({ kind: "new", professionalId: p.id, minutes })}
+                          >
+                            + Agendar
+                          </button>
+                        )}
+                      </div>
+                    );
+                  })}
+
+                  {list
+                    ?.filter((a) => a.professionalId === p.id)
+                    .map((a) => {
+                      const start = toMinutes(timeOf(a.startTime));
+                      const service = catalog.services.find((s) => s.id === a.serviceId);
+                      const customer = catalog.customers.find((c) => c.id === a.customerId);
+                      const short = a.durationMinutes <= STEP;
                       return (
-                        <div
-                          key={appt.id}
-                          style={{ gridColumn: colIndex + 2, gridRow: `${rowStart} / span ${rowSpan}` }}
+                        <button
+                          key={a.id}
+                          type="button"
+                          className={`appt ${STATUS_CLASS[a.status]}${short ? " short" : ""}`}
+                          style={slotBox(Math.max(0, start - window_.open), a.durationMinutes, 3)}
+                          onClick={() => setDialog({ kind: "detail", appointment: a })}
                         >
-                          <AppointmentCard
-                            appointment={appt}
-                            serviceName={data.services.find((s) => s.id === appt.serviceId)?.name ?? "Servicio"}
-                            customer={data.customers.find((c) => c.id === appt.customerId)}
-                            onChanged={reload}
-                            onReschedule={() => setRescheduling(appt)}
-                          />
-                        </div>
+                          <span className="t">{timeOf(a.startTime)}</span>
+                          <span className="s">{service?.name ?? "Servicio"}</span>
+                          <span className="c">{a.customerId ? customerLabel(customer) : "Sin cliente"}</span>
+                        </button>
                       );
-                    }),
-                )}
-              </div>
-            </>
-          );
-        })()
+                    })}
+
+                  {showNow && <div className="now" style={{ top: `calc(var(--slot-h) * ${nowOffset! / STEP})` }} />}
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
+
+      {dialog?.kind === "new" && (
+        <NewAppointmentDialog
+          catalog={catalog}
+          date={date}
+          initialProfessionalId={dialog.professionalId}
+          initialMinutes={dialog.minutes}
+          onClose={() => setDialog(null)}
+          onCreated={(appointment, customer) => {
+            if (customer && !catalog.customers.some((c) => c.id === customer.id)) {
+              setCatalog({ ...catalog, customers: [...catalog.customers, customer] });
+            }
+            setDialog(null);
+            const service = catalog.services.find((s) => s.id === appointment.serviceId);
+            showToast(`Turno agendado ${timeOf(appointment.startTime)} · ${service?.name ?? ""}`);
+            reloadDay(date);
+          }}
+        />
+      )}
+
+      {dialog?.kind === "detail" && (
+        <AppointmentDetailDialog
+          appointment={dialog.appointment}
+          catalog={catalog}
+          onClose={() => setDialog(null)}
+          onChanged={(message) => {
+            setDialog(null);
+            showToast(message);
+            reloadDay(date);
+          }}
+        />
       )}
     </div>
   );

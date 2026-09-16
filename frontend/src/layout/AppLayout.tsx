@@ -1,6 +1,7 @@
 import type { ReactNode } from "react";
 import { NavLink, Outlet } from "react-router-dom";
 import { useAuth } from "../auth/AuthContext";
+import { ToastProvider } from "../components/Toast";
 
 // Icon paths copied from the mockups' sidebar (Mockups/*.html).
 function Icon({ children }: { children: ReactNode }) {
@@ -135,7 +136,9 @@ export function AppLayout() {
         </div>
       </nav>
       <main className="main-content">
-        <Outlet />
+        <ToastProvider>
+          <Outlet />
+        </ToastProvider>
       </main>
     </div>
   );
