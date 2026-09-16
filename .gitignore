@@ -37,3 +37,6 @@ logs/
 
 # Internal docs not meant to be published in the repo
 ESPECIFICACION-TECNICA.md
+
+# Design mockups (local reference only)
+Mockups/
