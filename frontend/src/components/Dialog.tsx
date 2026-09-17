@@ -22,6 +22,11 @@ export function Dialog({
   useEffect(() => {
     const dialog = ref.current;
     dialog?.showModal();
+    // showModal() focuses the first focusable element, which is the close
+    // button (React's autoFocus prop doesn't set the DOM attribute
+    // showModal looks for) - a typed space would then close the dialog.
+    // Start on the first field instead, when there is one.
+    dialog?.querySelector<HTMLElement>(".sheet-content :is(input, select, textarea)")?.focus();
     return () => dialog?.close();
   }, []);
 

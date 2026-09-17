@@ -18,6 +18,7 @@ import {
   toTime,
   type Appointment,
   type Catalog,
+  type Customer,
 } from "./model";
 
 const STEP = 30;
@@ -33,8 +34,13 @@ function slotBox(fromMinutes: number, lengthMinutes: number, inset = 0): CSSProp
   };
 }
 
+interface AgendaRouterState {
+  book?: { professionalId?: string; minutes?: number; customer?: Customer };
+  professionalId?: string;
+}
+
 type DialogState =
-  | { kind: "new"; professionalId?: string; minutes?: number }
+  | { kind: "new"; professionalId?: string; minutes?: number; customer?: Customer }
   | { kind: "detail"; appointment: Appointment }
   | null;
 
@@ -44,15 +50,17 @@ export default function AgendaPage() {
   const [date, setDate] = useState<string | null>(null);
   const [appointments, setAppointments] = useState<{ date: string; list: Appointment[] } | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [filter, setFilter] = useState("all");
+
   const location = useLocation();
   const navigate = useNavigate();
-  // Other screens (Inicio) open the booking dialog via router state:
-  // navigate("/agenda", { state: { book: { professionalId?, minutes? } } }).
-  const [dialog, setDialog] = useState<DialogState>(() => {
-    const book = (location.state as { book?: { professionalId?: string; minutes?: number } } | null)?.book;
-    return book ? { kind: "new", ...book } : null;
-  });
+  // Other screens deep-link here via router state:
+  //   { book: { professionalId?, minutes?, customer? } } opens the booking dialog,
+  //   { professionalId } filters the board to that professional.
+  const routerState = location.state as AgendaRouterState | null;
+  const [filter, setFilter] = useState(routerState?.professionalId ?? "all");
+  const [dialog, setDialog] = useState<DialogState>(() =>
+    routerState?.book ? { kind: "new", ...routerState.book } : null,
+  );
   const [now, setNow] = useState<{ date: string; minutes: number } | null>(null);
   const boardRef = useRef<HTMLDivElement>(null);
   const scrolledFor = useRef<string | null>(null);
@@ -349,6 +357,7 @@ export default function AgendaPage() {
           date={date}
           initialProfessionalId={dialog.professionalId}
           initialMinutes={dialog.minutes}
+          initialCustomer={dialog.customer}
           onClose={() => setDialog(null)}
           onCreated={(appointment, customer) => {
             if (customer && !catalog.customers.some((c) => c.id === customer.id)) {

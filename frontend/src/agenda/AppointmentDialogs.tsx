@@ -218,6 +218,7 @@ export function NewAppointmentDialog({
   date,
   initialProfessionalId,
   initialMinutes,
+  initialCustomer,
   onClose,
   onCreated,
 }: {
@@ -225,6 +226,7 @@ export function NewAppointmentDialog({
   date: string;
   initialProfessionalId?: string;
   initialMinutes?: number;
+  initialCustomer?: Customer;
   onClose: () => void;
   onCreated: (appointment: Appointment, customer: Customer | null) => void;
 }) {
@@ -233,7 +235,9 @@ export function NewAppointmentDialog({
     catalog.services.filter((s) => s.active && catalog.assignments.get(id)?.includes(s.id));
   const services = offered(professionalId);
   const [serviceId, setServiceId] = useState(services[0]?.id ?? "");
-  const [customer, setCustomer] = useState<PickedCustomer>(null);
+  const [customer, setCustomer] = useState<PickedCustomer>(
+    initialCustomer ? { kind: "existing", customer: initialCustomer } : null,
+  );
   const [slot, setSlot] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);

@@ -6,11 +6,14 @@ export type DayOfWeek = "MONDAY" | "TUESDAY" | "WEDNESDAY" | "THURSDAY" | "FRIDA
 export interface Professional {
   id: string;
   name: string;
+  contactPhone?: string | null;
+  active?: boolean;
 }
 
 export interface Service {
   id: string;
   name: string;
+  description?: string | null;
   durationMinutes: number;
   price: number;
   active: boolean;
@@ -20,6 +23,7 @@ export interface Customer {
   id: string;
   name: string | null;
   phone: string | null;
+  internalNotes?: string | null;
   active: boolean;
 }
 
