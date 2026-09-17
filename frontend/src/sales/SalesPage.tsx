@@ -1,314 +1,565 @@
 import { useEffect, useState } from "react";
+import { useNavigate } from "react-router-dom";
 import { api, ApiError } from "../api/client";
+import { CustomerCombo, type PickedCustomer } from "../agenda/AppointmentDialogs";
+import {
+  customerLabel,
+  loadAppointments,
+  nowInZone,
+  PROFESSIONAL_COLORS,
+  timeOf,
+  toMinutes,
+  type Appointment,
+  type Customer,
+  type Professional,
+  type Service,
+} from "../agenda/model";
+import { Dialog } from "../components/Dialog";
+import { Delta, RangeBar, SplitBar, StatTile } from "../components/ReportKit";
+import {
+  percentChange,
+  previousRange,
+  rangeLabel,
+  rememberedRange,
+  rememberRange,
+  shortDate,
+  type Range,
+} from "../components/reportRange";
+import { RowMenu, TableEmpty } from "../components/TableKit";
+import { useToast } from "../components/Toast";
 import { formatMoney } from "../format";
 
-interface AppointmentResponse {
-  id: string;
-  professionalId: string;
-  serviceId: string;
-  customerId: string | null;
-  startTime: string;
-  price: number;
+interface Catalog {
+  timezone: string;
+  professionals: (Professional & { active: boolean })[]; // all, so old sales keep their name
+  services: Service[];
+  assignments: Map<string, string[]>; // active professionals only
+  customers: Map<string, Customer>;
 }
 
-interface NamedEntity {
-  id: string;
-  name: string;
+async function loadCatalog(): Promise<Catalog> {
+  const [establishment, professionalsPage, services, customersPage] = await Promise.all([
+    api.get<{ timezone: string }>("/establishment"),
+    api.get<{ content: (Professional & { active: boolean })[] }>("/professionals?size=100"),
+    api.get<Service[]>("/services"),
+    // ponytail: same size=200 name-lookup ceiling used elsewhere.
+    api.get<{ content: Customer[] }>("/customers?size=200"),
+  ]);
+  const active = professionalsPage.content.filter((p) => p.active);
+  const assigned = await Promise.all(active.map((p) => api.get<string[]>(`/professionals/${p.id}/services`)));
+  return {
+    timezone: establishment.timezone,
+    professionals: professionalsPage.content,
+    services,
+    assignments: new Map(active.map((p, i) => [p.id, assigned[i]])),
+    customers: new Map(customersPage.content.map((c) => [c.id, c])),
+  };
 }
 
-interface ServiceOption {
-  id: string;
-  name: string;
-  price: number;
+// "Ventas" = everything charged: completed appointments plus direct sales
+// (the same population /statistics/summary sums as totalSales).
+function loadSales(range: { from: string; to: string }, professionalId: string) {
+  const pro = professionalId ? `&professionalId=${professionalId}` : "";
+  return api
+    .get<Appointment[]>(`/appointments?from=${range.from}&to=${range.to}&status=COMPLETED${pro}`)
+    .then((list) => list.sort((a, b) => b.startTime.localeCompare(a.startTime)));
 }
 
-interface CustomerOption {
-  id: string;
-  name: string | null;
-  phone: string | null;
+const sum = (list: Appointment[]) => list.reduce((total, a) => total + Number(a.price), 0);
+
+function csvCell(value: string | number): string {
+  const text = String(value);
+  return /[";\n]/.test(text) ? `"${text.replace(/"/g, '""')}"` : text;
 }
 
-interface Page<T> {
-  content: T[];
+function downloadCsv(filename: string, rows: (string | number)[][]) {
+  // ";" + BOM: what spreadsheet apps in es-AR open correctly by default.
+  const csv = String.fromCharCode(0xfeff) + rows.map((row) => row.map(csvCell).join(";")).join("\r\n");
+  const url = URL.createObjectURL(new Blob([csv], { type: "text/csv;charset=utf-8" }));
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = filename;
+  link.click();
+  window.setTimeout(() => URL.revokeObjectURL(url), 0);
 }
 
-function toIsoDate(date: Date): string {
-  const y = date.getFullYear();
-  const m = String(date.getMonth() + 1).padStart(2, "0");
-  const d = String(date.getDate()).padStart(2, "0");
-  return `${y}-${m}-${d}`;
-}
-
-function customerLabel(customer: CustomerOption | undefined): string {
-  if (!customer) return "Sin cliente";
-  return customer.name ?? customer.phone ?? "Sin cliente";
-}
-
-const NEW_CUSTOMER = "__new__";
-
-function NewSaleForm({
-  professionals,
-  services,
-  customers,
-  onCancel,
+function SaleDialog({
+  catalog,
+  onClose,
   onSaved,
 }: {
-  professionals: NamedEntity[];
-  services: ServiceOption[];
-  customers: CustomerOption[];
-  onCancel: () => void;
-  onSaved: () => void;
+  catalog: Catalog;
+  onClose: () => void;
+  onSaved: (message: string) => void;
 }) {
-  const [professionalId, setProfessionalId] = useState(professionals[0]?.id ?? "");
-  const [serviceId, setServiceId] = useState(services[0]?.id ?? "");
-  const [price, setPrice] = useState(services[0]?.price ?? 0);
-  const [customerChoice, setCustomerChoice] = useState("");
-  const [customerName, setCustomerName] = useState("");
-  const [customerPhone, setCustomerPhone] = useState("");
-  const [error, setError] = useState<string | null>(null);
-  const [submitting, setSubmitting] = useState(false);
+  const now = nowInZone(catalog.timezone);
+  const activeProfessionals = catalog.professionals.filter((p) => p.active);
+  const offered = (id: string) =>
+    catalog.services.filter((s) => s.active && catalog.assignments.get(id)?.includes(s.id));
 
-  function handleServiceChange(id: string) {
-    setServiceId(id);
-    const service = services.find((s) => s.id === id);
-    if (service) {
-      setPrice(service.price);
-    }
-  }
+  const [professionalId, setProfessionalId] = useState(activeProfessionals[0]?.id ?? "");
+  const [serviceId, setServiceId] = useState(offered(activeProfessionals[0]?.id ?? "")[0]?.id ?? "");
+  const [price, setPrice] = useState<string>(String(offered(activeProfessionals[0]?.id ?? "")[0]?.price ?? ""));
+  const [customer, setCustomer] = useState<PickedCustomer>(null);
+  // "Cobrar este": today's latest confirmed appointment that already started.
+  const [candidate, setCandidate] = useState<Appointment | null>(null);
+  const [linked, setLinked] = useState<Appointment | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
+
+  useEffect(() => {
+    loadAppointments(now.date)
+      .then((list) =>
+        setCandidate(
+          list.filter((a) => a.status === "CONFIRMED" && toMinutes(timeOf(a.startTime)) <= now.minutes).pop() ?? null,
+        ),
+      )
+      .catch(() => setCandidate(null));
+    // Only on open.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  const services = offered(professionalId);
+  const amount = Number(price);
+  const nameOf = (a: Appointment) => ({
+    service: catalog.services.find((s) => s.id === a.serviceId)?.name ?? "Servicio",
+    professional: catalog.professionals.find((p) => p.id === a.professionalId)?.name ?? "Profesional",
+    customer: a.customerId ? customerLabel(catalog.customers.get(a.customerId)) : "Cliente ocasional",
+  });
 
   async function submit() {
-    setSubmitting(true);
+    setBusy(true);
     setError(null);
     try {
+      if (linked) {
+        await api.patch(`/appointments/${linked.id}/status`, { status: "COMPLETED" });
+        onSaved(`Turno de las ${timeOf(linked.startTime)} cobrado`);
+        return;
+      }
+      const isPhone = customer?.kind === "new" && /^[+\d\s()-]{6,}$/.test(customer.text);
       await api.post("/sales", {
         professionalId,
         serviceId,
-        price,
-        customerId: customerChoice && customerChoice !== NEW_CUSTOMER ? customerChoice : null,
-        customerName: customerChoice === NEW_CUSTOMER ? customerName || null : null,
-        customerPhone: customerChoice === NEW_CUSTOMER ? customerPhone || null : null,
+        price: amount,
+        customerId: customer?.kind === "existing" ? customer.customer.id : null,
+        customerName: customer?.kind === "new" && !isPhone ? customer.text : null,
+        customerPhone: customer?.kind === "new" && isPhone ? customer.text : null,
       });
-      onSaved();
+      onSaved(`Venta de ${formatMoney(amount)} registrada`);
     } catch (err) {
-      setError(err instanceof ApiError ? err.message : "No se pudo registrar la venta.");
-    } finally {
-      setSubmitting(false);
+      setError(
+        err instanceof ApiError && err.status === 409
+          ? "Ese profesional tiene un turno en este horario. Si la venta es de ese turno, usá “Cobrar este”."
+          : err instanceof ApiError
+            ? err.message
+            : "No se pudo registrar la venta.",
+      );
+      setBusy(false);
     }
   }
 
+  const valid = linked || (professionalId && serviceId && price !== "" && amount >= 0);
+  const shown = linked ? nameOf(linked) : null;
+
   return (
-    <div className="card" style={{ maxWidth: 480 }}>
-      <h2>Nueva venta</h2>
+    <Dialog
+      title="Registrar venta"
+      subtitle={`Hoy, ${shortDate(now.date)}`}
+      width={470}
+      onClose={onClose}
+      footer={
+        <>
+          <button type="button" disabled={!valid || busy} onClick={submit}>
+            {busy ? "Registrando…" : linked ? "Cobrar turno" : "Registrar venta"}
+          </button>
+          <button type="button" className="secondary" onClick={onClose}>
+            Cancelar
+          </button>
+          <span className="tot">{formatMoney(linked ? linked.price : amount || 0)}</span>
+        </>
+      }
+    >
       {error && <p className="error-text">{error}</p>}
 
-      <label className="field">
-        <span>Profesional</span>
-        <select value={professionalId} onChange={(e) => setProfessionalId(e.target.value)}>
-          {professionals.map((p) => (
-            <option key={p.id} value={p.id}>
-              {p.name}
-            </option>
-          ))}
-        </select>
-      </label>
-
-      <label className="field">
-        <span>Servicio</span>
-        <select value={serviceId} onChange={(e) => handleServiceChange(e.target.value)}>
-          {services.map((s) => (
-            <option key={s.id} value={s.id}>
-              {s.name}
-            </option>
-          ))}
-        </select>
-      </label>
-
-      <label className="field">
-        <span>Precio</span>
-        <input type="number" min={0} step="0.01" value={price} onChange={(e) => setPrice(Number(e.target.value))} />
-      </label>
-
-      <label className="field">
-        <span>Cliente</span>
-        <select value={customerChoice} onChange={(e) => setCustomerChoice(e.target.value)}>
-          <option value="">Sin cliente (anónimo)</option>
-          <option value={NEW_CUSTOMER}>Cliente nuevo...</option>
-          {customers.map((c) => (
-            <option key={c.id} value={c.id}>
-              {customerLabel(c)}
-            </option>
-          ))}
-        </select>
-      </label>
-
-      {customerChoice === NEW_CUSTOMER && (
-        <>
-          <label className="field">
-            <span>Nombre del cliente nuevo</span>
-            <input value={customerName} onChange={(e) => setCustomerName(e.target.value)} />
-          </label>
-          <label className="field">
-            <span>Teléfono del cliente nuevo</span>
-            <input value={customerPhone} onChange={(e) => setCustomerPhone(e.target.value)} />
-          </label>
-        </>
+      {candidate && (
+        <div className="linkpick">
+          <div className="tx">
+            <b>
+              {timeOf(candidate.startTime)} · {nameOf(candidate).service}
+            </b>
+            <span>
+              {nameOf(candidate).customer} con {nameOf(candidate).professional}
+            </span>
+          </div>
+          {linked ? (
+            <button type="button" className="secondary sm" onClick={() => setLinked(null)}>
+              Desvincular
+            </button>
+          ) : (
+            <button type="button" className="secondary sm" onClick={() => setLinked(candidate)}>
+              Cobrar este
+            </button>
+          )}
+        </div>
       )}
 
-      <div className="form-actions">
-        <button type="button" onClick={submit} disabled={!professionalId || !serviceId || submitting}>
-          {submitting ? "Guardando..." : "Registrar venta"}
-        </button>
-        <button type="button" className="secondary" onClick={onCancel}>
-          Cancelar
-        </button>
-      </div>
-    </div>
+      {linked && shown ? (
+        <>
+          <dl className="kv">
+            <dt>Profesional</dt>
+            <dd>{shown.professional}</dd>
+            <dt>Servicio</dt>
+            <dd>{shown.service}</dd>
+            <dt>Cliente</dt>
+            <dd>{shown.customer}</dd>
+            <dt>Precio</dt>
+            <dd>{formatMoney(linked.price)}</dd>
+          </dl>
+          <span className="help">Se marca el turno como completado con el precio con el que se reservó.</span>
+        </>
+      ) : (
+        <>
+          <div className="field">
+            <label htmlFor="sale-pro">Profesional</label>
+            <select
+              id="sale-pro"
+              value={professionalId}
+              onChange={(e) => {
+                const first = offered(e.target.value)[0];
+                setProfessionalId(e.target.value);
+                setServiceId(first?.id ?? "");
+                setPrice(first ? String(first.price) : "");
+              }}
+            >
+              {activeProfessionals.map((p) => (
+                <option key={p.id} value={p.id}>
+                  {p.name}
+                </option>
+              ))}
+            </select>
+          </div>
+          <div className="field">
+            <label htmlFor="sale-srv">Servicio</label>
+            <select
+              id="sale-srv"
+              value={serviceId}
+              disabled={services.length === 0}
+              onChange={(e) => {
+                setServiceId(e.target.value);
+                const service = services.find((s) => s.id === e.target.value);
+                if (service) setPrice(String(service.price));
+              }}
+            >
+              {services.length === 0 && <option value="">No tiene servicios activos</option>}
+              {services.map((s) => (
+                <option key={s.id} value={s.id}>
+                  {s.name} · {formatMoney(s.price)}
+                </option>
+              ))}
+            </select>
+          </div>
+          <div className="field">
+            <label htmlFor="sale-price">Precio cobrado</label>
+            <div className="input-affix prefix money">
+              <span>$</span>
+              <input
+                id="sale-price"
+                type="number"
+                min={0}
+                step="0.01"
+                inputMode="decimal"
+                value={price}
+                onChange={(e) => setPrice(e.target.value)}
+              />
+            </div>
+            <span className="help">Viene del servicio, pero lo podés cambiar si hiciste un descuento.</span>
+          </div>
+          <div className="field">
+            <label htmlFor="appt-customer">Cliente</label>
+            <CustomerCombo value={customer} onChange={setCustomer} placeholder="Buscá por nombre, o dejalo vacío" />
+            <span className="help">Si lo cargás, la venta queda en su ficha y suma a su historial.</span>
+          </div>
+        </>
+      )}
+    </Dialog>
   );
 }
 
 export default function SalesPage() {
-  const today = toIsoDate(new Date());
-  const [from, setFrom] = useState(today);
-  const [to, setTo] = useState(today);
-  const [professionalFilter, setProfessionalFilter] = useState("");
-  const [sales, setSales] = useState<AppointmentResponse[] | null>(null);
-  // All professionals (active + inactive) - a sale's professional shouldn't
-  // read as "Profesional" forever just because they were later deactivated.
-  const [professionals, setProfessionals] = useState<NamedEntity[]>([]);
-  // Active-only subset for the new-sale form, which can't book with someone
-  // deactivated.
-  const [activeProfessionals, setActiveProfessionals] = useState<NamedEntity[]>([]);
-  const [services, setServices] = useState<ServiceOption[]>([]);
-  const [customers, setCustomers] = useState<CustomerOption[]>([]);
+  const navigate = useNavigate();
+  const showToast = useToast();
+  const [catalog, setCatalog] = useState<Catalog | null>(null);
+  const [range, setRange] = useState<Range | null>(null);
+  const [compare, setCompare] = useState(true);
+  const [professionalId, setProfessionalId] = useState("");
+  const [data, setData] = useState<{ key: string; sales: Appointment[]; previous: Appointment[] | null } | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [showForm, setShowForm] = useState(false);
-
-  function reload() {
-    const filter = professionalFilter ? `&professionalId=${professionalFilter}` : "";
-    api
-      .get<AppointmentResponse[]>(`/sales?from=${from}&to=${to}${filter}`)
-      .then((result) => {
-        setError(null);
-        setSales(result.sort((a, b) => b.startTime.localeCompare(a.startTime)));
-      })
-      .catch((err) => setError(err instanceof ApiError ? err.message : "No se pudieron cargar las ventas."));
-  }
-
-  useEffect(reload, [from, to, professionalFilter]);
-
-  function reloadCustomers() {
-    // ponytail: same size=200 lookup ceiling used elsewhere in this app.
-    return api
-      .get<Page<CustomerOption>>("/customers?size=200")
-      .then((customersPage) => setCustomers(customersPage.content));
-  }
+  const [dialogOpen, setDialogOpen] = useState(false);
+  const [reloadKey, setReloadKey] = useState(0);
 
   useEffect(() => {
-    Promise.all([
-      api.get<Page<NamedEntity>>("/professionals?size=100"),
-      api.get<Page<NamedEntity>>("/professionals?active=true&size=100"),
-      api.get<ServiceOption[]>("/services"),
-      reloadCustomers(),
-    ])
-      .then(([professionalsPage, activeProfessionalsPage, serviceList]) => {
-        setProfessionals(professionalsPage.content);
-        setActiveProfessionals(activeProfessionalsPage.content);
-        setServices(serviceList);
+    loadCatalog()
+      .then((result) => {
+        const remembered = rememberedRange(nowInZone(result.timezone).date);
+        setCatalog(result);
+        setRange(remembered.range);
+        setCompare(remembered.compare);
       })
-      .catch((err) => setError(err instanceof ApiError ? err.message : "No se pudieron cargar los datos."));
+      .catch((err) => setError(err instanceof ApiError ? err.message : "No se pudo cargar la pantalla."));
   }, []);
 
-  if (showForm) {
+  const key = range ? `${range.from}|${range.to}|${professionalId}|${compare}|${reloadKey}` : "";
+  useEffect(() => {
+    if (!range) return;
+    let cancelled = false;
+    Promise.all([loadSales(range, professionalId), compare ? loadSales(previousRange(range), professionalId) : null])
+      .then(([sales, previous]) => {
+        if (cancelled) return;
+        setError(null);
+        setData({ key, sales, previous });
+      })
+      .catch((err) => !cancelled && setError(err instanceof ApiError ? err.message : "No se pudieron cargar las ventas."));
+    return () => {
+      cancelled = true;
+    };
+    // key covers range/professional/compare/reload.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [key]);
+
+  function changeRange(next: Range, nextCompare: boolean) {
+    setRange(next);
+    setCompare(nextCompare);
+    rememberRange(next, nextCompare);
+  }
+
+  if (!catalog || !range) {
     return (
-      <div>
-        <h1>Ventas</h1>
-        <NewSaleForm
-          professionals={activeProfessionals}
-          services={services}
-          customers={customers}
-          onCancel={() => setShowForm(false)}
-          onSaved={() => {
-            setShowForm(false);
-            reload();
-            reloadCustomers();
-          }}
-        />
+      <div className="list-page">
+        <div className="page-head">
+          <div>
+            <h1>Ventas</h1>
+          </div>
+        </div>
+        {error ? <p className="error-text">{error}</p> : <p className="muted">Cargando…</p>}
       </div>
     );
   }
 
-  const total = sales?.reduce((sum, sale) => sum + sale.price, 0) ?? 0;
-  const professionalName = (id: string) => professionals.find((p) => p.id === id)?.name ?? "Profesional";
-  const serviceName = (id: string) => services.find((s) => s.id === id)?.name ?? "Servicio";
-  const customer = (id: string | null) => customers.find((c) => c.id === id);
+  const today = nowInZone(catalog.timezone).date;
+  const sales = data?.sales ?? [];
+  const previous = data?.previous ?? null;
+  const total = sum(sales);
+  const average = sales.length ? total / sales.length : 0;
+  const direct = sales.filter((a) => a.origin === "DIRECT_SALE");
+  const professional = (id: string) => catalog.professionals.find((p) => p.id === id);
+  const colorOf = (id: string) =>
+    PROFESSIONAL_COLORS[Math.max(0, catalog.professionals.findIndex((p) => p.id === id)) % PROFESSIONAL_COLORS.length];
+  const serviceName = (id: string) => catalog.services.find((s) => s.id === id)?.name ?? "Servicio";
+  const customerOf = (a: Appointment) => (a.customerId ? catalog.customers.get(a.customerId) : undefined);
+
+  const byDay = new Map<string, Appointment[]>();
+  for (const a of sales) {
+    const day = a.startTime.slice(0, 10);
+    byDay.set(day, [...(byDay.get(day) ?? []), a]);
+  }
+  const singleDay = range.from === range.to;
+
+  function exportCsv() {
+    downloadCsv(`ventas_${range!.from}_${range!.to}.csv`, [
+      ["Fecha", "Hora", "Profesional", "Servicio", "Origen", "Cliente", "Precio"],
+      ...[...sales].reverse().map((a) => [
+        a.startTime.slice(0, 10),
+        timeOf(a.startTime),
+        professional(a.professionalId)?.name ?? "",
+        serviceName(a.serviceId),
+        a.origin === "DIRECT_SALE" ? "Venta directa" : "Turno",
+        a.customerId ? customerLabel(customerOf(a)) : "Ocasional",
+        Number(a.price),
+      ]),
+    ]);
+  }
 
   return (
-    <div>
-      <h1>Ventas</h1>
+    <div className="list-page report-page">
+      <div className="page-head">
+        <div>
+          <h1>Ventas</h1>
+          <p>Todo lo cobrado · {rangeLabel(range)}</p>
+        </div>
+        <div className="acts">
+          <button type="button" className="secondary" disabled={sales.length === 0} onClick={exportCsv}>
+            <svg viewBox="0 0 24 24" aria-hidden="true">
+              <path d="M12 4v12M7 11l5 5 5-5M4 20h16" />
+            </svg>
+            Exportar
+          </button>
+          <button type="button" onClick={() => setDialogOpen(true)} disabled={!catalog.professionals.some((p) => p.active)}>
+            <svg viewBox="0 0 24 24" aria-hidden="true">
+              <path d="M12 5v14M5 12h14" />
+            </svg>
+            Registrar venta
+          </button>
+        </div>
+      </div>
+
+      <RangeBar range={range} today={today} compare={compare} onChange={changeRange}>
+        <select
+          className="select"
+          aria-label="Filtrar profesional"
+          value={professionalId}
+          onChange={(e) => setProfessionalId(e.target.value)}
+        >
+          <option value="">Todos los profesionales</option>
+          {catalog.professionals.map((p) => (
+            <option key={p.id} value={p.id}>
+              {p.name}
+              {p.active ? "" : " (inactivo)"}
+            </option>
+          ))}
+        </select>
+      </RangeBar>
+
       {error && <p className="error-text">{error}</p>}
 
-      <div className="form-actions">
-        <button type="button" onClick={() => setShowForm(true)}>
-          Nueva venta
-        </button>
-      </div>
+      <div className={`report-body${data?.key === key ? "" : " stale"}`} aria-busy={data?.key !== key}>
+        <div className="kpis4">
+          <StatTile label="Cobrado" value={formatMoney(total)}>
+            {compare && previous && <Delta change={percentChange(total, sum(previous))} />}
+          </StatTile>
+          <StatTile label="Ventas" value={sales.length}>
+            {compare && previous && <Delta change={percentChange(sales.length, previous.length)} />}
+          </StatTile>
+          <StatTile label="Ticket promedio" value={formatMoney(Math.round(average))}>
+            {compare && previous && (
+              <Delta change={percentChange(average, previous.length ? sum(previous) / previous.length : 0)} />
+            )}
+          </StatTile>
+          <div className="panel stat-tile">
+            <span className="lab">De dónde vino</span>
+            <SplitBar
+              label="Origen de lo cobrado"
+              parts={[
+                { label: `Turnos ${total ? Math.round(((total - sum(direct)) / total) * 100) : 0}%`, value: total - sum(direct), color: "var(--pine)" },
+                { label: `Venta directa ${total ? Math.round((sum(direct) / total) * 100) : 0}%`, value: sum(direct), color: "var(--brick)" },
+              ]}
+            />
+          </div>
+        </div>
 
-      <div className="form-actions">
-        <label className="field">
-          <span>Desde</span>
-          <input type="date" value={from} onChange={(e) => setFrom(e.target.value)} />
-        </label>
-        <label className="field">
-          <span>Hasta</span>
-          <input type="date" value={to} onChange={(e) => setTo(e.target.value)} />
-        </label>
-        <label className="field">
-          <span>Profesional</span>
-          <select value={professionalFilter} onChange={(e) => setProfessionalFilter(e.target.value)}>
-            <option value="">Todos</option>
-            {professionals.map((p) => (
-              <option key={p.id} value={p.id}>
-                {p.name}
-              </option>
-            ))}
-          </select>
-        </label>
-      </div>
-
-      {sales === null ? (
-        <p>Cargando...</p>
-      ) : sales.length === 0 ? (
-        <p>No hay ventas en ese período.</p>
-      ) : (
-        <>
-          <table>
-            <thead>
-              <tr>
-                <th>Fecha</th>
-                <th>Profesional</th>
-                <th>Servicio</th>
-                <th>Cliente</th>
-                <th>Precio</th>
-              </tr>
-            </thead>
-            <tbody>
-              {sales.map((sale) => (
-                <tr key={sale.id}>
-                  <td>
-                    {sale.startTime.slice(0, 10)} {sale.startTime.slice(11, 16)}
-                  </td>
-                  <td>{professionalName(sale.professionalId)}</td>
-                  <td>{serviceName(sale.serviceId)}</td>
-                  <td>{customerLabel(customer(sale.customerId))}</td>
-                  <td>{formatMoney(sale.price)}</td>
+        <div className="table-card">
+          <div className="panel-head">
+            <div>
+              <h2>Detalle de ventas</h2>
+              <p>
+                {sales.length} {sales.length === 1 ? "venta" : "ventas"} · {formatMoney(total)} en el período
+              </p>
+            </div>
+          </div>
+          {data === null ? (
+            <p className="muted table-error">Cargando…</p>
+          ) : sales.length === 0 ? (
+            <TableEmpty
+              icon="search"
+              title="No hay ventas en este rango"
+              text="Probá con otro período, o registrá la primera."
+              action={
+                <button type="button" onClick={() => setDialogOpen(true)}>
+                  Registrar venta
+                </button>
+              }
+            />
+          ) : (
+            <table className="sales-table">
+              <thead>
+                <tr>
+                  <th>Hora</th>
+                  <th>Profesional</th>
+                  <th>Servicio</th>
+                  <th className="hide-sm">Cliente</th>
+                  <th className="num">Precio</th>
+                  <th>
+                    <span className="sr-only">Acciones</span>
+                  </th>
                 </tr>
-              ))}
-            </tbody>
-          </table>
-          <p>
-            <strong>Total: {formatMoney(total)}</strong>
-          </p>
-        </>
+              </thead>
+              <tbody>
+                {[...byDay.entries()].map(([day, list]) => [
+                  !singleDay && (
+                    <tr key={`day-${day}`} className="dayhead">
+                      <td colSpan={3}>
+                        {shortDate(day)} · {list.length} {list.length === 1 ? "venta" : "ventas"}
+                      </td>
+                      <td className="hide-sm" />
+                      <td className="num">{formatMoney(sum(list))}</td>
+                      <td />
+                    </tr>
+                  ),
+                  ...list.map((a) => {
+                    const customer = customerOf(a);
+                    return (
+                      <tr key={a.id}>
+                        <td>{timeOf(a.startTime)}</td>
+                        <td>
+                          <span className="who">
+                            <span className="dot" style={{ background: colorOf(a.professionalId) }} aria-hidden="true" />
+                            {professional(a.professionalId)?.name ?? "Profesional"}
+                          </span>
+                        </td>
+                        <td className="grow">
+                          {serviceName(a.serviceId)}
+                          {a.origin === "DIRECT_SALE" && <span className="linked"> · sin turno</span>}
+                        </td>
+                        <td className="hide-sm">
+                          {a.customerId ? customerLabel(customer) : <span className="muted">Ocasional</span>}
+                        </td>
+                        <td className="num">{formatMoney(a.price)}</td>
+                        <td>
+                          {a.customerId && (
+                            <div className="rowacts">
+                              <RowMenu
+                                items={[
+                                  {
+                                    label: "Ficha del cliente",
+                                    icon: "user",
+                                    onSelect: () => navigate("/customers", { state: { customerId: a.customerId } }),
+                                  },
+                                ]}
+                              />
+                            </div>
+                          )}
+                        </td>
+                      </tr>
+                    );
+                  }),
+                ])}
+                <tr className="total">
+                  <td colSpan={3}>
+                    Total del período · {sales.length} {sales.length === 1 ? "venta" : "ventas"}
+                  </td>
+                  <td className="hide-sm" />
+                  <td className="num">{formatMoney(total)}</td>
+                  <td />
+                </tr>
+              </tbody>
+            </table>
+          )}
+        </div>
+      </div>
+
+      {dialogOpen && (
+        <SaleDialog
+          catalog={catalog}
+          onClose={() => setDialogOpen(false)}
+          onSaved={(message) => {
+            setDialogOpen(false);
+            showToast(message);
+            // A sale may have created a customer inline: refresh names too.
+            loadCatalog()
+              .then(setCatalog)
+              .catch(() => {});
+            setReloadKey((k) => k + 1);
+          }}
+        />
       )}
     </div>
   );

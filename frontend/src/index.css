@@ -2638,125 +2638,700 @@ a.button.secondary:hover {
 }
 
 /* ---------------------------------------------------------------------
-   Statistics: hero figure, magnitude bars, meters, KPI tiles.
-   Bars compare magnitude across a named set (sales/services per
-   professional) - one neutral hue, never categorical color, per the
-   dataviz skill ("the series ARE the subject" doesn't apply here, the
-   *amount* does). Meters are single-value gauges (a ratio against a
-   limit) - fill + a lighter step of the very same hue as its track.
+   Ventas & Estadísticas (Mockups/ventas-stats-mockup.html).
+   Charts: magnitude in one hue (brick), identity only in two-part splits
+   with a legend; bars <=24px with 4px rounded data-ends; tooltips on
+   hover and focus, values also reachable without them.
 --------------------------------------------------------------------- */
-.stats-hero {
-  grid-column: 1 / -1;
+.up {
+  color: var(--pine);
+  font-weight: 600;
 }
 
-.hero-figure {
-  font-size: 48px;
+.down {
+  color: var(--brick);
+  font-weight: 600;
+}
+
+.flat {
+  color: var(--muted);
+  font-weight: 600;
+}
+
+.rangebar {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 9px 11px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+  box-shadow: var(--shadow);
+}
+
+.presets {
+  display: flex;
+  gap: 4px;
+  flex-wrap: wrap;
+}
+
+.presets button {
+  border: 1px solid transparent;
+  background: none;
+  color: var(--muted);
+  padding: 6px 11px;
+  border-radius: 8px;
+  font-size: 13px;
   font-weight: 500;
-  margin: 4px 0 20px;
 }
 
-.bar-row {
+.presets button:hover:not(:disabled) {
+  filter: none;
+  background: var(--brick-soft);
+  color: var(--brick);
+}
+
+.presets button[aria-pressed="true"] {
+  background: var(--brick);
+  color: #fff;
+  font-weight: 600;
+}
+
+.rangebar .dates {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 13px;
+  color: var(--muted);
+  border-left: 1px solid var(--border);
+  padding-left: 11px;
+}
+
+.rangebar input[type="date"] {
+  border: 1px solid var(--border-strong);
+  background: var(--surface);
+  border-radius: 8px;
+  padding: 6px 8px;
+  font-size: 13px;
+}
+
+.rangebar .right {
+  margin-left: auto;
   display: flex;
   align-items: center;
   gap: 12px;
-  padding: 6px 0;
+  flex-wrap: wrap;
 }
 
-.bar-row-label {
-  flex: 0 0 auto;
-  max-width: 45%;
-  font-size: var(--text-secondary-size);
-  color: var(--color-text-secondary);
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+.rangebar select.select {
+  padding-top: 6px;
+  padding-bottom: 6px;
+  font-size: 13px;
 }
 
-.bar-track {
-  flex: 1;
-  height: 20px;
-  background: var(--color-bg-page);
-  border-radius: var(--radius-control);
-  overflow: hidden;
-}
-
-.bar-fill {
-  display: block;
-  height: 100%;
-  background: var(--color-neutral-text);
-  border-radius: 0 var(--radius-control) var(--radius-control) 0;
-}
-
-.bar-row-value {
-  flex: 0 0 auto;
-  min-width: 56px;
-  font-size: var(--text-secondary-size);
-  font-weight: 500;
-  text-align: right;
-}
-
-.meter-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
-  gap: 20px;
-  margin-top: 20px;
-}
-
-.meter-value {
-  font-size: 28px;
-  font-weight: 500;
-  margin: 4px 0 12px;
-}
-
-.meter-track {
-  display: block;
-  height: 10px;
-  border-radius: 999px;
-  overflow: hidden;
-}
-
-.meter-fill {
-  display: block;
-  height: 100%;
-  border-radius: 999px;
-}
-
-.meter-error .meter-track {
-  background: var(--color-error-bg);
-}
-
-.meter-error .meter-fill {
-  background: var(--color-error-text);
-}
-
-.meter-warning .meter-track {
-  background: var(--color-warning-bg);
-}
-
-.meter-warning .meter-fill {
-  background: var(--color-warning-text);
-}
-
-.meter-neutral .meter-track {
-  background: var(--color-neutral-bg);
-}
-
-.meter-neutral .meter-fill {
-  background: var(--color-neutral-text);
-}
-
-.kpi-row {
+.cmpsw {
   display: flex;
-  gap: 32px;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  color: var(--muted);
+  cursor: pointer;
+}
+
+.sw {
+  position: relative;
+  width: 34px;
+  height: 20px;
+  flex: none;
+}
+
+.sw input {
+  position: absolute;
+  inset: 0;
+  opacity: 0;
+  margin: 0;
+  width: 100%;
+  height: 100%;
+  cursor: pointer;
+}
+
+.sw i {
+  position: absolute;
+  inset: 0;
+  background: var(--border-strong);
+  border-radius: 99px;
+  pointer-events: none;
+  transition: background 0.15s;
+}
+
+.sw i::after {
+  content: "";
+  position: absolute;
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  background: #fff;
+  top: 3px;
+  left: 3px;
+  transition: transform 0.15s;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.25);
+}
+
+.sw input:checked + i {
+  background: var(--pine);
+}
+
+.sw input:checked + i::after {
+  transform: translateX(14px);
+}
+
+.sw input:focus-visible + i {
+  outline: 2px solid var(--brick);
+  outline-offset: 2px;
+}
+
+.report-body {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  transition: opacity 0.15s;
+}
+
+/* Refetch keeps the frame: previous numbers dim instead of flashing. */
+.report-body.stale {
+  opacity: 0.55;
+}
+
+.kpis4 {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 13px;
+}
+
+.stat-tile {
+  position: relative;
+  padding: 14px 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.stat-tile .lab {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  margin: 0;
+  font-size: 12.5px;
+  font-weight: 400;
+  color: var(--muted);
+}
+
+.stat-tile .val {
+  font-size: 25px;
+  font-weight: 700;
+  letter-spacing: -0.03em;
+  line-height: 1.2;
+}
+
+.stat-tile .cmp {
+  font-size: 12px;
+  color: var(--muted);
+  min-height: 1.45em;
+}
+
+.stat-tile .stack {
+  margin: 8px 0 4px;
+}
+
+.stat-tile .lg {
+  font-size: 11.5px;
+  gap: 9px;
+}
+
+button.q {
+  width: 16px;
+  height: 16px;
+  padding: 0;
+  border-radius: 50%;
+  border: 1px solid var(--border-strong);
+  background: none;
+  color: var(--muted);
+  font-size: 10px;
+  font-weight: 700;
+}
+
+button.q:hover:not(:disabled) {
+  filter: none;
+  border-color: var(--brick);
+  color: var(--brick);
+}
+
+.help-pop {
+  position: absolute;
+  z-index: 5;
+  top: 36px;
+  left: 12px;
+  right: 12px;
+  padding: 9px 11px;
+  border-radius: 9px;
+  background: var(--ink);
+  color: var(--paper);
+  font-size: 12px;
+  box-shadow: var(--shadow-lift);
+}
+
+.stack {
+  height: 11px;
+  border-radius: 99px;
+  overflow: hidden;
+  display: flex;
+  gap: 2px;
+}
+
+.stack i {
+  display: block;
+  height: 100%;
+}
+
+.lg {
+  display: flex;
+  gap: 14px;
+  flex-wrap: wrap;
+  font-size: 12.5px;
+  color: var(--muted);
   margin-top: 8px;
 }
 
-.kpi-tile-value {
-  font-size: 28px;
+.lg span {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.lg em {
+  width: 9px;
+  height: 9px;
+  border-radius: 3px;
+  display: block;
+}
+
+.panel-head p {
+  margin: 2px 0 0;
+  font-size: 12.5px;
+  color: var(--muted);
+}
+
+.panel-body {
+  padding: 16px 18px;
+}
+
+.panel-body > .muted {
+  margin: 0;
+}
+
+.report-page .grid2 {
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+}
+
+/* Sales table */
+tr.dayhead td {
+  background: var(--surface-2);
+  font-weight: 600;
+  font-size: 12.5px;
+  color: var(--muted);
+  padding: 7px 16px;
+}
+
+tr.dayhead .num {
+  color: var(--ink);
+  font-weight: 700;
+}
+
+tr.total td {
+  font-weight: 700;
+  font-size: 14px;
+  border-top: 1px solid var(--border-strong);
+  background: var(--surface-2);
+}
+
+.who {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  flex: none;
+}
+
+.linked {
+  font-size: 11.5px;
+  color: var(--muted);
+}
+
+.table-card > .panel-head {
+  border-radius: var(--radius-card) var(--radius-card) 0 0;
+}
+
+/* Sale dialog */
+.linkpick {
+  border: 1px solid var(--border);
+  background: var(--surface-2);
+  border-radius: 10px;
+  padding: 11px 13px;
+  display: flex;
+  align-items: center;
+  gap: 11px;
+  font-size: 13px;
+}
+
+.linkpick .tx b {
+  display: block;
+  font-size: 13.5px;
+}
+
+.linkpick .tx span {
+  color: var(--muted);
+  font-size: 12.5px;
+}
+
+.linkpick button {
+  margin-left: auto;
+}
+
+.sheet footer .tot {
+  margin-left: auto;
+  font-size: 15px;
+  font-weight: 700;
+}
+
+.field .input-affix.money span {
+  align-self: stretch;
+  display: flex;
+  align-items: center;
+  padding: 0 11px;
+  background: var(--surface-2);
+  border-right: 1px solid var(--border);
+  border-radius: var(--radius-control) 0 0 var(--radius-control);
+}
+
+.field .input-affix.money input {
+  font-size: 15px;
+  font-weight: 600;
+}
+
+/* Charts */
+.chart-wrap {
+  position: relative;
+}
+
+.chart-tip {
+  position: absolute;
+  bottom: calc(100% + 6px);
+  transform: translateX(-50%);
+  white-space: nowrap;
+  padding: 5px 9px;
+  border-radius: 8px;
+  background: var(--ink);
+  color: var(--paper);
+  font-size: 12px;
+  font-weight: 600;
+  pointer-events: none;
+  z-index: 5;
+}
+
+.daychart,
+.hours {
+  display: flex;
+  align-items: flex-end;
+  gap: 4px;
+  border-bottom: 1px solid var(--border);
+}
+
+.daychart {
+  height: 140px;
+}
+
+.hours {
+  height: 92px;
+}
+
+.daychart .dcol,
+.hours .h {
+  flex: 1;
+  min-width: 0;
+  height: 100%;
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  border-radius: 4px 4px 0 0;
+  cursor: default;
+}
+
+.daychart .dcol:focus-visible,
+.hours .h:focus-visible {
+  outline-offset: 0;
+}
+
+.daychart .b,
+.hours .b {
+  width: 100%;
+  max-width: 24px;
+  min-height: 3px;
+  border-radius: 4px 4px 0 0;
+  background: var(--brick);
+  transition: filter 0.1s;
+}
+
+.daychart .dcol.zero .b {
+  background: var(--slate-soft);
+}
+
+.hours .b {
+  background: color-mix(in srgb, var(--brick) 35%, var(--surface));
+}
+
+.hours .h.peak .b {
+  background: var(--brick);
+}
+
+.daychart .dcol:hover .b,
+.daychart .dcol:focus .b,
+.hours .h:hover .b,
+.hours .h:focus .b {
+  filter: brightness(1.15);
+}
+
+.daylabs,
+.hourlabs {
+  display: flex;
+  gap: 4px;
+  margin-top: 7px;
+}
+
+.daylabs span,
+.hourlabs span {
+  flex: 1;
+  min-width: 0;
+  text-align: center;
+  font-size: 11px;
+  color: var(--muted);
+  white-space: nowrap;
+}
+
+.chart-foot {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  margin-top: 8px;
+  font-size: 12px;
+  color: var(--muted);
+}
+
+.chart-note {
+  margin: 11px 0 0;
+  font-size: 12.5px;
+  color: var(--muted);
+}
+
+.chart-note b {
+  color: var(--ink);
+}
+
+.table-view {
+  margin-top: 10px;
+  font-size: 12.5px;
+}
+
+.table-view summary {
+  cursor: pointer;
+  color: var(--muted);
+}
+
+.table-view table {
+  margin-top: 8px;
+  max-width: 320px;
+}
+
+.table-view td {
+  padding: 4px 8px;
+  font-size: 12.5px;
+}
+
+.bars {
+  display: flex;
+  flex-direction: column;
+  gap: 11px;
+}
+
+.brow {
+  display: grid;
+  grid-template-columns: 110px 1fr auto;
+  gap: 11px;
+  align-items: center;
+  font-size: 13px;
+}
+
+.brow .n {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
   font-weight: 500;
 }
 
-.kpi-tile-label {
-  font-size: var(--text-secondary-size);
-  color: var(--color-text-secondary);
+.brow .track {
+  height: 10px;
+  background: var(--slate-soft);
+  border-radius: 0 4px 4px 0;
+  overflow: hidden;
+}
+
+.brow .track i {
+  display: block;
+  height: 100%;
+  background: var(--brick);
+  border-radius: 0 4px 4px 0;
+}
+
+.brow .v {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+  font-weight: 600;
+  min-width: 82px;
+}
+
+.brow .v small {
+  display: block;
+  font-weight: 500;
+  color: var(--muted);
+  font-size: 11.5px;
+}
+
+.rate {
+  padding: 16px 18px;
+  display: flex;
+  flex-direction: column;
+  gap: 9px;
+}
+
+.rate .top {
+  display: flex;
+  align-items: baseline;
+  gap: 9px;
+}
+
+.rate .big {
+  font-size: 27px;
+  font-weight: 700;
+  letter-spacing: -0.03em;
+}
+
+.rate .note {
+  font-size: 12.5px;
+  color: var(--muted);
+}
+
+/* Meter: fill and track are two steps of the same hue. */
+.meter {
+  display: block;
+  height: 9px;
+  border-radius: 99px;
+  overflow: hidden;
+}
+
+.meter i {
+  display: block;
+  height: 100%;
+  border-radius: 99px;
+}
+
+.meter.slate {
+  background: var(--slate-soft);
+}
+
+.meter.slate i {
+  background: var(--slate);
+}
+
+.meter.amber {
+  background: var(--amber-soft);
+}
+
+.meter.amber i {
+  background: var(--amber);
+}
+
+@media (max-width: 1000px) {
+  .kpis4 {
+    grid-template-columns: 1fr 1fr;
+  }
+
+  .report-page .grid2 {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 900px) {
+  .rangebar .dates {
+    border-left: 0;
+    padding-left: 0;
+    width: 100%;
+  }
+
+  .rangebar .right {
+    margin-left: 0;
+  }
+
+  .brow {
+    grid-template-columns: 84px 1fr auto;
+  }
+
+  /* Here the service column absorbs the squeeze, not the time. */
+  .table-card .sales-table td:first-child {
+    max-width: none;
+    width: auto;
+  }
+
+  .sales-table td.grow {
+    max-width: 0;
+    width: 100%;
+  }
+
+  .sales-table th,
+  .sales-table td {
+    padding-left: 8px;
+    padding-right: 8px;
+  }
+}
+
+@media print {
+  .sidebar,
+  .page-head .acts,
+  .rangebar .presets,
+  .cmpsw,
+  .table-view summary,
+  .toast {
+    display: none !important;
+  }
+
+  .app-shell {
+    display: block;
+    height: auto;
+  }
+
+  .main-content {
+    overflow: visible;
+    padding: 0;
+  }
+
+  .panel,
+  .rangebar {
+    box-shadow: none;
+    break-inside: avoid;
+  }
 }

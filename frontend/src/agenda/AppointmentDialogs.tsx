@@ -104,11 +104,19 @@ function SlotPicker({
   );
 }
 
-type PickedCustomer = { kind: "existing"; customer: Customer } | { kind: "new"; text: string } | null;
+export type PickedCustomer = { kind: "existing"; customer: Customer } | { kind: "new"; text: string } | null;
 
 // Mockup .combo: server-side search, "Crear cliente" for an unknown name or
 // phone (created on submit), empty = walk-in customer.
-function CustomerCombo({ value, onChange }: { value: PickedCustomer; onChange: (value: PickedCustomer) => void }) {
+export function CustomerCombo({
+  value,
+  onChange,
+  placeholder = "Buscá por nombre o teléfono",
+}: {
+  value: PickedCustomer;
+  onChange: (value: PickedCustomer) => void;
+  placeholder?: string;
+}) {
   const listId = useId();
   const [query, setQuery] = useState(
     value?.kind === "existing" ? customerLabel(value.customer) : value?.kind === "new" ? value.text : "",
@@ -159,7 +167,7 @@ function CustomerCombo({ value, onChange }: { value: PickedCustomer; onChange: (
         aria-controls={listId}
         aria-autocomplete="list"
         autoComplete="off"
-        placeholder="Buscá por nombre o teléfono"
+        placeholder={placeholder}
         value={query}
         onFocus={() => setOpen(true)}
         onBlur={() => setOpen(false)}
