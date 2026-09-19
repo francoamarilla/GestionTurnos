@@ -47,6 +47,9 @@ public class CustomerService {
         if (request.internalNotes() != null) {
             customer.setInternalNotes(request.internalNotes());
         }
+        if (request.active() != null) {
+            customer.setActive(request.active());
+        }
         return CustomerResponse.from(customerRepository.save(customer));
     }
 

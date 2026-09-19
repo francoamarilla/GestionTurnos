@@ -76,6 +76,12 @@ public class ProfessionalService {
         if (request.contactPhone() != null) {
             professional.setContactPhone(request.contactPhone());
         }
+        if (request.active() != null) {
+            if (!request.active()) {
+                requireNoPendingAppointments(professional);
+            }
+            professional.setActive(request.active());
+        }
         return ProfessionalResponse.from(professionalRepository.save(professional));
     }
 
@@ -84,14 +90,20 @@ public class ProfessionalService {
     // reassign them first.
     public void deactivate(UUID tenantId, UUID id) {
         Professional professional = getOwnedOrThrow(tenantId, id);
+        requireNoPendingAppointments(professional);
+        professional.setActive(false);
+        professionalRepository.save(professional);
+    }
+
+    // Shared by DELETE /{id} and by PATCH /{id} with active=false, so the
+    // rule-15 guard cannot be sidestepped through the update path.
+    private void requireNoPendingAppointments(Professional professional) {
         boolean hasPendingAppointments = appointmentRepository.existsByProfessionalIdAndStatusAndStartTimeAfter(
                 professional.getId(), AppointmentStatus.CONFIRMED, Instant.now());
         if (hasPendingAppointments) {
             throw new ResponseStatusException(
                     HttpStatus.CONFLICT, "Professional has unresolved future confirmed appointments");
         }
-        professional.setActive(false);
-        professionalRepository.save(professional);
     }
 
     public List<DaySchedule> getSchedule(UUID tenantId, UUID professionalId) {

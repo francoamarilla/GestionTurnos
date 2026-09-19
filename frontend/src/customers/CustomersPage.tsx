@@ -301,6 +301,18 @@ export default function CustomersPage() {
   const [reloadKey, setReloadKey] = useState(0);
   const reload = () => setReloadKey((k) => k + 1);
 
+  // Backlog item 1: PATCH accepts `active`, so un cliente dado de baja
+  // vuelve sin re-cargarlo (DELETE only sets active=false).
+  function reactivate(customer: Customer) {
+    api
+      .patch(`/customers/${customer.id}`, { active: true })
+      .then(() => {
+        showToast(`${customerLabel(customer)} volvió a estar activo`);
+        reload();
+      })
+      .catch((err) => setError(err instanceof ApiError ? err.message : "No se pudo activar al cliente."));
+  }
+
   // Names for the history list and the tenant's "today".
   useEffect(() => {
     Promise.all([
@@ -508,7 +520,14 @@ export default function CustomersPage() {
                                       onSelect: () => setDialog({ kind: "deactivate", customer }),
                                     },
                                   ]
-                                : []),
+                                : [
+                                    null,
+                                    {
+                                      label: "Volver a activar",
+                                      icon: "on" as const,
+                                      onSelect: () => reactivate(customer),
+                                    },
+                                  ]),
                             ]}
                           />
                         </div>

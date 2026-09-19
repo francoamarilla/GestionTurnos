@@ -150,6 +150,12 @@ const MENU_ICONS = {
       <path d="M8 12h8" />
     </>
   ),
+  on: (
+    <>
+      <circle cx="12" cy="12" r="9" />
+      <path d="M8.5 12.5l2.5 2.5 4.5-5" />
+    </>
+  ),
 };
 
 // Mockup .menu: "more actions" kebab. Items separated by `null`.

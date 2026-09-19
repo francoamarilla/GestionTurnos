@@ -49,6 +49,9 @@ public class ServiceCatalogService {
         if (request.price() != null) {
             service.setPrice(request.price());
         }
+        if (request.active() != null) {
+            service.setActive(request.active());
+        }
         return ServiceResponse.from(serviceRepository.save(service));
     }
 

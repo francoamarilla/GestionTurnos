@@ -264,6 +264,18 @@ export default function ServicesPage() {
 
   useEffect(reload, []);
 
+  // Backlog item 1: PATCH accepts `active`, so a service dado de baja can
+  // come back without re-creating it (DELETE only sets active=false).
+  function reactivate(service: Service) {
+    api
+      .patch(`/services/${service.id}`, { active: true })
+      .then(() => {
+        showToast(`“${service.name}” volvió a estar activo`);
+        reload();
+      })
+      .catch((err) => setError(err instanceof ApiError ? err.message : "No se pudo activar el servicio."));
+  }
+
   const header = (
     <div className="page-head">
       <div>
@@ -457,17 +469,15 @@ export default function ServicesPage() {
                                     ),
                               },
                               { label: "Quién lo hace", icon: "user", onSelect: () => setDialog({ kind: "who", service }) },
-                              ...(service.active
-                                ? [
-                                    null,
-                                    {
-                                      label: "Dar de baja",
-                                      icon: "off" as const,
-                                      danger: true,
-                                      onSelect: () => setDialog({ kind: "deactivate", service }),
-                                    },
-                                  ]
-                                : []),
+                              null,
+                              service.active
+                                ? {
+                                    label: "Dar de baja",
+                                    icon: "off" as const,
+                                    danger: true,
+                                    onSelect: () => setDialog({ kind: "deactivate", service }),
+                                  }
+                                : { label: "Volver a activar", icon: "on" as const, onSelect: () => reactivate(service) },
                             ]}
                           />
                         </div>

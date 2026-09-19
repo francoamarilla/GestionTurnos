@@ -401,7 +401,25 @@ function AdminHome() {
         inactive.length === 1
           ? "No se puede reservar ni vender ese servicio."
           : `${inactive.map((s) => s.name).join(", ")}. No se pueden reservar ni vender.`,
-      action: { label: "Ver servicios", run: () => navigate("/services") },
+      // Backlog item 1: with one inactive service the fix is one PATCH, so
+      // Inicio resolves it here instead of only pointing at Servicios.
+      action:
+        inactive.length === 1
+          ? {
+              label: "Activar",
+              run: () => {
+                api
+                  .patch(`/services/${inactive[0].id}`, { active: true })
+                  .then(() => {
+                    showToast(`Servicio “${inactive[0].name}” activado`);
+                    reload();
+                  })
+                  .catch((err) =>
+                    showToast(err instanceof ApiError ? err.message : "No se pudo activar el servicio."),
+                  );
+              },
+            }
+          : { label: "Ver servicios", run: () => navigate("/services") },
     });
   }
 

@@ -404,6 +404,18 @@ export default function ProfessionalsPage() {
 
   useEffect(reload, []);
 
+  // Backlog item 1: PATCH accepts `active`, so alguien dado de baja vuelve
+  // sin re-crearlo (DELETE only sets active=false).
+  function reactivate(row: Row) {
+    api
+      .patch(`/professionals/${row.id}`, { active: true })
+      .then(() => {
+        showToast(`${row.name} volvió a estar activo`);
+        reload();
+      })
+      .catch((err) => setError(err instanceof ApiError ? err.message : "No se pudo activar al profesional."));
+  }
+
   const header = (
     <div className="page-head">
       <div>
@@ -598,7 +610,14 @@ export default function ProfessionalsPage() {
                                       onSelect: () => setDialog({ kind: "deactivate", row }),
                                     },
                                   ]
-                                : []),
+                                : [
+                                    null,
+                                    {
+                                      label: "Volver a activar",
+                                      icon: "on" as const,
+                                      onSelect: () => reactivate(row),
+                                    },
+                                  ]),
                             ]}
                           />
                         </div>
