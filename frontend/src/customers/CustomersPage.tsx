@@ -6,15 +6,18 @@ import { customerLabel, nowInZone, type Appointment, type Customer } from "../ag
 import { AppointmentStatusBadge, Badge } from "../components/Badge";
 import { Dialog } from "../components/Dialog";
 import {
+  ActiveChips,
   Avatar,
   DeactivateDialog,
   IdCell,
   Pager,
   RowMenu,
   SearchBox,
+  SortHeader,
   TableEmpty,
   WarnBar,
 } from "../components/TableKit";
+import type { ActiveFilter, Sort } from "../components/tableUtils";
 import { useToast } from "../components/Toast";
 import { formatMoney } from "../format";
 
@@ -29,6 +32,25 @@ interface Page<T> {
   totalElements: number;
 }
 
+// GET /api/customers/summary: the customer plus the totals the table
+// shows, already aggregated (ENDPOINTS-PENDIENTES.md #2). The same fields
+// feed the filters and the sort, which is why both run on the server -
+// this page only ever holds ten of the rows they apply to.
+interface CustomerSummary extends Customer {
+  visits: number;
+  lastVisit: string | null; // ISO date-time in the tenant's zone, or null
+  spent: number;
+  noShows: number;
+}
+
+type SortKey = "name" | "visits" | "lastVisit" | "spent";
+
+const ACTIVE_PARAM: Record<ActiveFilter, string> = {
+  activos: "&active=true",
+  inactivos: "&active=false",
+  todos: "",
+};
+
 interface Stats {
   visits: number; // completed appointments
   spent: number;
@@ -37,9 +59,9 @@ interface Stats {
   history: Appointment[]; // newest first
 }
 
-// ponytail: per-customer history call for the visible page only - the API
-// has no aggregate yet (see ENDPOINTS-PENDIENTES.md #2), so these columns
-// can't be sorted or filtered across the whole base.
+// Only the ficha uses this now: one call for one open dialog, for the
+// history list that no aggregate can replace. The table's numbers come
+// from /customers/summary.
 async function loadStats(id: string): Promise<Stats> {
   const history = (await api.get<Appointment[]>(`/customers/${id}/appointments`)).sort((a, b) =>
     b.startTime.localeCompare(a.startTime),
@@ -67,8 +89,7 @@ function ago(days: number): string {
   return `hace ${Math.round(days / 365)} ${Math.round(days / 365) === 1 ? "año" : "años"}`;
 }
 
-const avatarColor = (stats: Stats | undefined) =>
-  stats && stats.visits >= LOYAL_VISITS ? "var(--brick)" : "var(--slate)";
+const avatarColor = (visits: number) => (visits >= LOYAL_VISITS ? "var(--brick)" : "var(--slate)");
 
 function whatsAppUrl(phone: string): string {
   return `https://wa.me/${phone.replace(/\D/g, "")}`;
@@ -286,11 +307,14 @@ export default function CustomersPage() {
   const navigate = useNavigate();
   const location = useLocation();
   const showToast = useToast();
-  const [page, setPage] = useState<Page<Customer> | null>(null);
+  const [page, setPage] = useState<Page<CustomerSummary> | null>(null);
   const [pageNumber, setPageNumber] = useState(0);
   const [query, setQuery] = useState("");
   const [search, setSearch] = useState("");
-  const [stats, setStats] = useState<Map<string, Stats>>(new Map());
+  const [filter, setFilter] = useState<ActiveFilter>("activos");
+  const [sort, setSort] = useState<Sort<SortKey>>(null);
+  const [dormantOnly, setDormantOnly] = useState(false);
+  const [counts, setCounts] = useState<{ active: number; inactive: number; dormant: number } | null>(null);
   const [meta, setMeta] = useState<{
     today: string;
     services: Map<string, string>;
@@ -339,24 +363,51 @@ export default function CustomersPage() {
     return () => window.clearTimeout(timer);
   }, [query]);
 
+  // Chip and warnbar numbers count the whole base, not the current page or
+  // the search, same as in Servicios and Profesionales. size=1 because only
+  // totalElements is read.
   useEffect(() => {
     let cancelled = false;
-    const q = search ? `&search=${encodeURIComponent(search)}` : "";
+    Promise.all([
+      api.get<Page<CustomerSummary>>("/customers/summary?size=1&active=true"),
+      api.get<Page<CustomerSummary>>("/customers/summary?size=1&active=false"),
+      api.get<Page<CustomerSummary>>(`/customers/summary?size=1&active=true&dormantDays=${DORMANT_DAYS}`),
+    ])
+      .then(([active, inactive, dormant]) => {
+        if (cancelled) return;
+        setCounts({
+          active: active.totalElements,
+          inactive: inactive.totalElements,
+          dormant: dormant.totalElements,
+        });
+      })
+      .catch(() => setCounts(null));
+    return () => {
+      cancelled = true;
+    };
+  }, [reloadKey]);
+
+  useEffect(() => {
+    let cancelled = false;
+    const params = [
+      `page=${pageNumber}`,
+      `size=${PAGE_SIZE}`,
+      `sort=${sort ? `${sort.key},${sort.dir === 1 ? "asc" : "desc"}` : "name,asc"}`,
+      search ? `search=${encodeURIComponent(search)}` : "",
+      dormantOnly ? `dormantDays=${DORMANT_DAYS}` : "",
+    ].filter(Boolean);
     api
-      .get<Page<Customer>>(`/customers?page=${pageNumber}&size=${PAGE_SIZE}&sort=name${q}`)
-      .then(async (result) => {
+      .get<Page<CustomerSummary>>(`/customers/summary?${params.join("&")}${ACTIVE_PARAM[filter]}`)
+      .then((result) => {
         if (cancelled) return;
         setError(null);
         setPage(result);
-        const loaded = await Promise.all(result.content.map((c) => loadStats(c.id).catch(() => null)));
-        if (cancelled) return;
-        setStats(new Map(result.content.flatMap((c, i) => (loaded[i] ? [[c.id, loaded[i]] as const] : []))));
       })
       .catch((err) => !cancelled && setError(err instanceof ApiError ? err.message : "No se pudieron cargar los clientes."));
     return () => {
       cancelled = true;
     };
-  }, [pageNumber, search, reloadKey]);
+  }, [pageNumber, search, filter, sort, dormantOnly, reloadKey]);
 
   // Opened from Inicio ("Ver ficha"): router state { customerId }.
   useEffect(() => {
@@ -370,6 +421,24 @@ export default function CustomersPage() {
   }, [location.state, location.pathname, navigate, showToast]);
 
   const bookFor = (customer: Customer) => navigate("/agenda", { state: { book: { customer } } });
+
+  // "Ver quiénes son" is the dormant filter, and dormidos are counted among
+  // the active ones, so it forces that chip too.
+  function showDormant() {
+    setDormantOnly(true);
+    setFilter("activos");
+    setPageNumber(0);
+  }
+
+  function showEveryone() {
+    setDormantOnly(false);
+    setPageNumber(0);
+  }
+
+  function sortOn(next: Sort<SortKey>) {
+    setSort(next);
+    setPageNumber(0);
+  }
 
   const header = (
     <div className="page-head">
@@ -398,6 +467,16 @@ export default function CustomersPage() {
       <div className="table-card">
         <div className="table-tools">
           <SearchBox value={query} placeholder="Buscar por nombre o teléfono" onChange={setQuery} />
+          {counts && (
+            <ActiveChips
+              value={filter}
+              counts={counts}
+              onChange={(next) => {
+                setFilter(next);
+                setPageNumber(0);
+              }}
+            />
+          )}
           {page && (
             <span className="count">
               {total} {total === 1 ? "cliente" : "clientes"}
@@ -406,6 +485,26 @@ export default function CustomersPage() {
         </div>
         {error && <p className="error-text table-error">{error}</p>}
 
+        {dormantOnly ? (
+          <WarnBar icon="clock" action={<button type="button" className="secondary sm" onClick={showEveryone}>Ver todos</button>}>
+            Mostrando solo los que no vienen hace más de 2 meses.
+          </WarnBar>
+        ) : (
+          counts !== null &&
+          counts.dormant > 0 && (
+            <WarnBar
+              icon="clock"
+              action={
+                <button type="button" className="secondary sm" onClick={showDormant}>
+                  Ver quiénes son
+                </button>
+              }
+            >
+              {counts.dormant} {counts.dormant === 1 ? "cliente" : "clientes"} sin venir hace más de 2 meses.
+            </WarnBar>
+          )
+        )}
+
         {!page || !meta ? (
           !error && <p className="muted table-error">Cargando…</p>
         ) : page.content.length === 0 ? (
@@ -413,13 +512,26 @@ export default function CustomersPage() {
             <TableEmpty
               icon="search"
               title={`Nada coincide con “${search}”`}
-              text="Probá con menos letras o con parte del teléfono."
+              text="Probá con menos letras, con parte del teléfono, o revisá el filtro de estado."
               action={
                 <button type="button" className="secondary" onClick={() => setQuery("")}>
                   Limpiar búsqueda
                 </button>
               }
             />
+          ) : dormantOnly ? (
+            <TableEmpty
+              icon="check"
+              title="Nadie está dormido"
+              text="Todos tus clientes pasaron en los últimos 2 meses."
+              action={
+                <button type="button" className="secondary" onClick={showEveryone}>
+                  Ver todos
+                </button>
+              }
+            />
+          ) : filter === "inactivos" ? (
+            <TableEmpty icon="check" title="No hay nadie dado de baja" text="Toda tu cartera está activa." />
           ) : (
             <TableEmpty
               icon="plus"
@@ -437,10 +549,10 @@ export default function CustomersPage() {
             <table>
               <thead>
                 <tr>
-                  <th>Cliente</th>
-                  <th className="num hide-sm">Turnos</th>
-                  <th>Última visita</th>
-                  <th className="num hide-sm">Gastado</th>
+                  <SortHeader label="Cliente" sortKey="name" sort={sort} onSort={sortOn} />
+                  <SortHeader label="Turnos" sortKey="visits" sort={sort} onSort={sortOn} className="num hide-sm" />
+                  <SortHeader label="Última visita" sortKey="lastVisit" sort={sort} onSort={sortOn} />
+                  <SortHeader label="Gastado" sortKey="spent" sort={sort} onSort={sortOn} className="num hide-sm" />
                   <th>
                     <span className="sr-only">Acciones</span>
                   </th>
@@ -448,36 +560,38 @@ export default function CustomersPage() {
               </thead>
               <tbody>
                 {page.content.map((customer) => {
-                  const s = stats.get(customer.id);
-                  const sinceLast = s?.lastVisit ? daysBetween(s.lastVisit, meta.today) : null;
+                  const sinceLast = customer.lastVisit
+                    ? daysBetween(customer.lastVisit.slice(0, 10), meta.today)
+                    : null;
                   const open = () => setDialog({ kind: "sheet", customer });
                   return (
                     <tr key={customer.id} className={`clickable${customer.active ? "" : " off"}`} onClick={open}>
                       <td>
                         <IdCell
-                          avatar={<Avatar name={customer.name ?? customer.phone} color={avatarColor(s)} round />}
+                          avatar={
+                            <Avatar name={customer.name ?? customer.phone} color={avatarColor(customer.visits)} round />
+                          }
                           title={
                             <>
                               <button type="button" className="rowlink" onClick={open}>
                                 {customerLabel(customer)}
                               </button>
-                              {s && s.visits >= LOYAL_VISITS && <Badge variant="brick">Fiel</Badge>}
+                              {customer.visits >= LOYAL_VISITS && <Badge variant="brick">Fiel</Badge>}
                               {!customer.active && <Badge variant="slate">Inactivo</Badge>}
                             </>
                           }
                           subtitle={
                             <>
                               {customer.name ? (customer.phone ?? "Sin teléfono") : "Sin nombre"}
-                              {s && s.noShows > 0 && ` · ${s.noShows} ${s.noShows === 1 ? "falta" : "faltas"}`}
+                              {customer.noShows > 0 &&
+                                ` · ${customer.noShows} ${customer.noShows === 1 ? "falta" : "faltas"}`}
                             </>
                           }
                         />
                       </td>
-                      <td className="num hide-sm">{s ? s.visits : "…"}</td>
+                      <td className="num hide-sm">{customer.visits}</td>
                       <td>
-                        {!s ? (
-                          "…"
-                        ) : sinceLast === null ? (
+                        {sinceLast === null ? (
                           <span className="muted">Nunca</span>
                         ) : (
                           <>
@@ -486,7 +600,7 @@ export default function CustomersPage() {
                           </>
                         )}
                       </td>
-                      <td className="num hide-sm">{s ? formatMoney(s.spent) : "…"}</td>
+                      <td className="num hide-sm">{formatMoney(customer.spent)}</td>
                       <td onClick={(e) => e.stopPropagation()}>
                         <div className="rowacts">
                           {customer.active && (
