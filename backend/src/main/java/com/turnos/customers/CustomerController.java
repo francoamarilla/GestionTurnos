@@ -41,6 +41,19 @@ public class CustomerController {
         return customerService.search(principal.tenantId(), search, pageable);
     }
 
+    // Kept apart from GET /api/customers on purpose: Agenda e Inicio load
+    // customers only to show names, and should not pay for the aggregate
+    // scan this one does.
+    @GetMapping("/summary")
+    public Page<CustomerSummaryResponse> summary(
+            @AuthenticationPrincipal AuthenticatedPrincipal principal,
+            @RequestParam(required = false) String search,
+            @RequestParam(required = false) Boolean active,
+            @RequestParam(required = false) Integer dormantDays,
+            Pageable pageable) {
+        return customerService.summary(principal.tenantId(), search, active, dormantDays, pageable);
+    }
+
     @PostMapping
     @ResponseStatus(HttpStatus.CREATED)
     public CustomerResponse create(

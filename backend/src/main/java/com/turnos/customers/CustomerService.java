@@ -1,5 +1,8 @@
 package com.turnos.customers;
 
+import com.turnos.tenancy.Tenant;
+import com.turnos.tenancy.TenantRepository;
+import java.time.ZoneId;
 import java.util.UUID;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
@@ -11,13 +14,33 @@ import org.springframework.web.server.ResponseStatusException;
 public class CustomerService {
 
     private final CustomerRepository customerRepository;
+    private final CustomerSummaryQuery customerSummaryQuery;
+    private final TenantRepository tenantRepository;
 
-    public CustomerService(CustomerRepository customerRepository) {
+    public CustomerService(
+            CustomerRepository customerRepository,
+            CustomerSummaryQuery customerSummaryQuery,
+            TenantRepository tenantRepository) {
         this.customerRepository = customerRepository;
+        this.customerSummaryQuery = customerSummaryQuery;
+        this.tenantRepository = tenantRepository;
     }
 
     public Page<CustomerResponse> search(UUID tenantId, String search, Pageable pageable) {
         return customerRepository.search(tenantId, search, pageable).map(CustomerResponse::from);
+    }
+
+    // Same list as search(), plus the per-customer totals the clients table
+    // shows. `dormantDays` keeps only those whose last visit is older than
+    // that many days - never-visited customers are not "dormidos", they
+    // simply have not started, so a null lastVisit is excluded.
+    public Page<CustomerSummaryResponse> summary(
+            UUID tenantId, String search, Boolean active, Integer dormantDays, Pageable pageable) {
+        Tenant tenant = tenantRepository
+                .findById(tenantId)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Tenant not found"));
+        return customerSummaryQuery.find(
+                tenantId, search, active, dormantDays, pageable, ZoneId.of(tenant.getTimezone()));
     }
 
     public CustomerResponse findById(UUID tenantId, UUID id) {
