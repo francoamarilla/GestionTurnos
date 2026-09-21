@@ -1,6 +1,7 @@
 import { api } from "../api/client";
 
-export type AppointmentStatus = "CONFIRMED" | "COMPLETED" | "CANCELLED" | "NO_SHOW";
+// VOIDED = a charged appointment whose sale was annulled from Ventas.
+export type AppointmentStatus = "CONFIRMED" | "COMPLETED" | "CANCELLED" | "NO_SHOW" | "VOIDED";
 export type DayOfWeek = "MONDAY" | "TUESDAY" | "WEDNESDAY" | "THURSDAY" | "FRIDAY" | "SATURDAY" | "SUNDAY";
 
 export interface Professional {
@@ -104,6 +105,7 @@ export const STATUS_CLASS: Record<AppointmentStatus, string> = {
   COMPLETED: "completado",
   NO_SHOW: "noshow",
   CANCELLED: "cancelado",
+  VOIDED: "cancelado", // freed the slot, same look as cancelled
 };
 
 export const STATUS_LABEL: Record<AppointmentStatus, string> = {
@@ -111,6 +113,7 @@ export const STATUS_LABEL: Record<AppointmentStatus, string> = {
   COMPLETED: "Completado",
   NO_SHOW: "No asistió",
   CANCELLED: "Cancelado",
+  VOIDED: "Anulado",
 };
 
 // Professional column accents, cycled in list order.

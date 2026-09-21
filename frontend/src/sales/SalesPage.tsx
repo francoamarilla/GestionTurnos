@@ -80,6 +80,34 @@ const PAYMENT_METHODS = Object.keys(PAYMENT) as PaymentMethod[];
 // Service select value for a sale off the catalog (sent as serviceId null).
 const OTHER = "other";
 
+// The customer fields POST /sales and PATCH /sales/{id} share: an existing
+// customer, a new one typed as name or phone, or nobody (walk-in).
+function customerPayload(customer: PickedCustomer) {
+  const isPhone = customer?.kind === "new" && /^[+\d\s()-]{6,}$/.test(customer.text);
+  return {
+    customerId: customer?.kind === "existing" ? customer.customer.id : null,
+    customerName: customer?.kind === "new" && !isPhone ? customer.text : null,
+    customerPhone: customer?.kind === "new" && isPhone ? customer.text : null,
+  };
+}
+
+function PaymentField({ value, onChange }: { value: PaymentMethod | null; onChange: (m: PaymentMethod) => void }) {
+  return (
+    <div className="field">
+      <span className="label" id="sale-pay">
+        Cómo pagó
+      </span>
+      <div className="chip-row" role="group" aria-labelledby="sale-pay">
+        {PAYMENT_METHODS.map((m) => (
+          <button key={m} type="button" className="chip" aria-pressed={value === m} onClick={() => onChange(m)}>
+            {PAYMENT[m].label}
+          </button>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 function csvCell(value: string | number): string {
   const text = String(value);
   return /[";\n]/.test(text) ? `"${text.replace(/"/g, '""')}"` : text;
@@ -155,15 +183,12 @@ function SaleDialog({
         onSaved(`Turno de las ${timeOf(linked.startTime)} cobrado: ${formatMoney(amount)}`);
         return;
       }
-      const isPhone = customer?.kind === "new" && /^[+\d\s()-]{6,}$/.test(customer.text);
       await api.post("/sales", {
         professionalId,
         serviceId: serviceId === OTHER ? null : serviceId,
         description: serviceId === OTHER ? description.trim() : null,
         price: amount,
-        customerId: customer?.kind === "existing" ? customer.customer.id : null,
-        customerName: customer?.kind === "new" && !isPhone ? customer.text : null,
-        customerPhone: customer?.kind === "new" && isPhone ? customer.text : null,
+        ...customerPayload(customer),
         paymentMethod: payment,
       });
       onSaved(`Venta de ${formatMoney(amount)} registrada`);
@@ -333,17 +358,145 @@ function SaleDialog({
         </>
       )}
 
+      <PaymentField value={payment} onChange={setPayment} />
+    </Dialog>
+  );
+}
+
+// ENDPOINTS-PENDIENTES #10: price, payment and customer only; anything
+// else is void + register again.
+function EditSaleDialog({
+  sale,
+  catalog,
+  onClose,
+  onSaved,
+}: {
+  sale: Appointment;
+  catalog: Catalog;
+  onClose: () => void;
+  onSaved: (message: string) => void;
+}) {
+  const current = sale.customerId ? catalog.customers.get(sale.customerId) : undefined;
+  const [price, setPrice] = useState(String(sale.price));
+  const [payment, setPayment] = useState<PaymentMethod | null>(sale.paymentMethod);
+  const [customer, setCustomer] = useState<PickedCustomer>(current ? { kind: "existing", customer: current } : null);
+  const [error, setError] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
+  const amount = Number(price);
+
+  async function submit() {
+    setBusy(true);
+    setError(null);
+    try {
+      await api.patch(`/sales/${sale.id}`, { price: amount, paymentMethod: payment, ...customerPayload(customer) });
+      onSaved("Venta corregida");
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : "No se pudo guardar la venta.");
+      setBusy(false);
+    }
+  }
+
+  return (
+    <Dialog
+      title="Editar venta"
+      subtitle={`${shortDate(sale.startTime.slice(0, 10))} · ${timeOf(sale.startTime)}`}
+      width={470}
+      onClose={onClose}
+      footer={
+        <>
+          <button type="button" disabled={busy || price === "" || amount < 0} onClick={submit}>
+            {busy ? "Guardando…" : "Guardar"}
+          </button>
+          <button type="button" className="secondary" onClick={onClose}>
+            Cancelar
+          </button>
+          <span className="tot">{formatMoney(amount || 0)}</span>
+        </>
+      }
+    >
+      {error && <p className="error-text">{error}</p>}
       <div className="field">
-        <span className="label" id="sale-pay">
-          Cómo pagó
-        </span>
-        <div className="chip-row" role="group" aria-labelledby="sale-pay">
-          {PAYMENT_METHODS.map((m) => (
-            <button key={m} type="button" className="chip" aria-pressed={payment === m} onClick={() => setPayment(m)}>
-              {PAYMENT[m].label}
-            </button>
-          ))}
+        <label htmlFor="edit-price">Precio cobrado</label>
+        <div className="input-affix prefix money">
+          <span>$</span>
+          <input
+            id="edit-price"
+            type="number"
+            min={0}
+            step="0.01"
+            inputMode="decimal"
+            value={price}
+            onChange={(e) => setPrice(e.target.value)}
+          />
         </div>
+      </div>
+      <div className="field">
+        <label htmlFor="appt-customer">Cliente</label>
+        <CustomerCombo value={customer} onChange={setCustomer} placeholder="Buscá por nombre, o dejalo vacío" />
+      </div>
+      <PaymentField value={payment} onChange={setPayment} />
+      <span className="help">Para cambiar servicio, profesional u hora, anulá la venta y cargala de nuevo.</span>
+    </Dialog>
+  );
+}
+
+function VoidSaleDialog({
+  sale,
+  label,
+  onClose,
+  onVoided,
+}: {
+  sale: Appointment;
+  label: string;
+  onClose: () => void;
+  onVoided: (message: string) => void;
+}) {
+  const [reason, setReason] = useState("");
+  const [error, setError] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
+
+  async function submit() {
+    setBusy(true);
+    setError(null);
+    try {
+      await api.post(`/sales/${sale.id}/void`, { reason: reason.trim() || null });
+      onVoided(`Venta de ${formatMoney(sale.price)} anulada`);
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : "No se pudo anular la venta.");
+      setBusy(false);
+    }
+  }
+
+  return (
+    <Dialog
+      title="Anular venta"
+      width={420}
+      onClose={onClose}
+      footer={
+        <>
+          <button type="button" disabled={busy} onClick={submit}>
+            {busy ? "Anulando…" : "Anular venta"}
+          </button>
+          <button type="button" className="secondary" onClick={onClose}>
+            Cancelar
+          </button>
+        </>
+      }
+    >
+      {error && <p className="error-text">{error}</p>}
+      <p className="confirm-text">
+        ¿Anular <b>{label}</b> de las {timeOf(sale.startTime)} por <b>{formatMoney(sale.price)}</b>?
+      </p>
+      <p className="muted">Deja de sumar en Ventas y Estadísticas. No se puede deshacer.</p>
+      <div className="field">
+        <label htmlFor="void-reason">Motivo (opcional)</label>
+        <input
+          id="void-reason"
+          maxLength={200}
+          placeholder="Ej.: cargada dos veces"
+          value={reason}
+          onChange={(e) => setReason(e.target.value)}
+        />
       </div>
     </Dialog>
   );
@@ -359,6 +512,8 @@ export default function SalesPage() {
   const [data, setData] = useState<{ key: string; sales: Appointment[]; previous: Appointment[] | null } | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [dialogOpen, setDialogOpen] = useState(false);
+  const [editing, setEditing] = useState<Appointment | null>(null);
+  const [voiding, setVoiding] = useState<Appointment | null>(null);
   const [reloadKey, setReloadKey] = useState(0);
 
   useEffect(() => {
@@ -389,6 +544,18 @@ export default function SalesPage() {
     // key covers range/professional/compare/reload.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [key]);
+
+  function afterChange(message: string) {
+    setDialogOpen(false);
+    setEditing(null);
+    setVoiding(null);
+    showToast(message);
+    // A sale may have created a customer inline: refresh names too.
+    loadCatalog()
+      .then(setCatalog)
+      .catch(() => {});
+    setReloadKey((k) => k + 1);
+  }
 
   function changeRange(next: Range, nextCompare: boolean) {
     setRange(next);
@@ -595,19 +762,22 @@ export default function SalesPage() {
                         </td>
                         <td className="num">{formatMoney(a.price)}</td>
                         <td>
-                          {a.customerId && (
-                            <div className="rowacts">
-                              <RowMenu
-                                items={[
-                                  {
-                                    label: "Ficha del cliente",
-                                    icon: "user",
-                                    onSelect: () => navigate("/customers", { state: { customerId: a.customerId } }),
-                                  },
-                                ]}
-                              />
-                            </div>
-                          )}
+                          <div className="rowacts">
+                            <RowMenu
+                              items={[
+                                { label: "Editar", icon: "edit", onSelect: () => setEditing(a) },
+                                a.customerId
+                                  ? {
+                                      label: "Ficha del cliente",
+                                      icon: "user",
+                                      onSelect: () => navigate("/customers", { state: { customerId: a.customerId } }),
+                                    }
+                                  : null,
+                                null,
+                                { label: "Anular venta", icon: "off", danger: true, onSelect: () => setVoiding(a) },
+                              ]}
+                            />
+                          </div>
                         </td>
                       </tr>
                     );
@@ -628,18 +798,17 @@ export default function SalesPage() {
       </div>
 
       {dialogOpen && (
-        <SaleDialog
-          catalog={catalog}
-          onClose={() => setDialogOpen(false)}
-          onSaved={(message) => {
-            setDialogOpen(false);
-            showToast(message);
-            // A sale may have created a customer inline: refresh names too.
-            loadCatalog()
-              .then(setCatalog)
-              .catch(() => {});
-            setReloadKey((k) => k + 1);
-          }}
+        <SaleDialog catalog={catalog} onClose={() => setDialogOpen(false)} onSaved={afterChange} />
+      )}
+      {editing && (
+        <EditSaleDialog sale={editing} catalog={catalog} onClose={() => setEditing(null)} onSaved={afterChange} />
+      )}
+      {voiding && (
+        <VoidSaleDialog
+          sale={voiding}
+          label={serviceName(voiding)}
+          onClose={() => setVoiding(null)}
+          onVoided={afterChange}
         />
       )}
     </div>

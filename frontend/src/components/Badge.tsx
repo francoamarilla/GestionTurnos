@@ -10,7 +10,8 @@ export function Badge({ variant, children }: { variant: BadgeVariant; children: 
   );
 }
 
-export type AppointmentStatus = "CONFIRMED" | "COMPLETED" | "CANCELLED" | "NO_SHOW";
+// VOIDED = a charged appointment whose sale was annulled from Ventas.
+export type AppointmentStatus = "CONFIRMED" | "COMPLETED" | "CANCELLED" | "NO_SHOW" | "VOIDED";
 
 // Mapping from Mockups/agenda-mockup.html: brick = Confirmado,
 // pine = Completado, amber = No asistió, slate = Cancelado.
@@ -19,6 +20,7 @@ const APPOINTMENT_STATUS: Record<AppointmentStatus, { variant: BadgeVariant; lab
   COMPLETED: { variant: "pine", label: "Completado" },
   CANCELLED: { variant: "slate", label: "Cancelado" },
   NO_SHOW: { variant: "amber", label: "No asistió" },
+  VOIDED: { variant: "slate", label: "Anulado" },
 };
 
 export function AppointmentStatusBadge({ status }: { status: AppointmentStatus }) {

@@ -329,7 +329,7 @@ export default function StatisticsPage() {
     .sort((a, b) => b.value - a.value);
 
   // Demand by start hour: everything booked (not cancelled).
-  const booked = current.appointments.filter((a) => a.status !== "CANCELLED");
+  const booked = current.appointments.filter((a) => a.status !== "CANCELLED" && a.status !== "VOIDED");
   const startHours = booked.map((a) => Number(timeOf(a.startTime).slice(0, 2)));
   const firstHour = startHours.length ? Math.min(...startHours) : 9;
   const lastHour = startHours.length ? Math.max(...startHours) : 19;

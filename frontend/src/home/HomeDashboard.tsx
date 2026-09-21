@@ -315,7 +315,7 @@ function AdminHome() {
   const row = (a: Appointment) => {
     const isPast = endMinutes(a) <= now.minutes;
     return (
-      <li key={a.id} className={`${isPast ? "past" : ""}${a.status === "CANCELLED" ? " cancel" : ""}`}>
+      <li key={a.id} className={`${isPast ? "past" : ""}${a.status === "CANCELLED" || a.status === "VOIDED" ? " cancel" : ""}`}>
         <button type="button" onClick={() => setDetail(a)}>
           <span className="t">{timeOf(a.startTime)}</span>
           <span className="txt">
