@@ -101,6 +101,7 @@ class CancellationNotifierTest extends AbstractIntegrationTest {
                 null,
                 null,
                 null,
+                null,
                 null);
     }
 

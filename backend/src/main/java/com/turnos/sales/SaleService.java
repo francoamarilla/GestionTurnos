@@ -117,6 +117,7 @@ public class SaleService {
         appointment.setPrice(request.price());
         appointment.setStatus(AppointmentStatus.COMPLETED);
         appointment.setOrigin(AppointmentOrigin.DIRECT_SALE);
+        appointment.setPaymentMethod(request.paymentMethod());
         appointment.setCompletedBy(adminId);
         appointment.setCompletedAt(Instant.now());
 

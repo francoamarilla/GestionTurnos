@@ -53,6 +53,10 @@ public class Appointment {
     @Enumerated(EnumType.STRING)
     private AppointmentOrigin origin;
 
+    // Null = not recorded (see V11).
+    @Enumerated(EnumType.STRING)
+    private PaymentMethod paymentMethod;
+
     private UUID rescheduledFromAppointmentId;
 
     private UUID completedBy;

@@ -62,7 +62,7 @@ public class AppointmentController {
             @PathVariable UUID id,
             @Valid @RequestBody UpdateAppointmentStatusRequest request) {
         AppointmentResponse response =
-                appointmentService.updateStatus(principal.tenantId(), principal.id(), id, request.status());
+                appointmentService.updateStatus(principal.tenantId(), principal.id(), id, request);
         if (request.status() == AppointmentStatus.CANCELLED) {
             cancellationNotifier.notifyBusinessCancellation(principal.tenantId(), response);
         }

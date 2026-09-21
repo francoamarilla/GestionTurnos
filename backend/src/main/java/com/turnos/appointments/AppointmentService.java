@@ -238,7 +238,15 @@ public class AppointmentService {
     // other attempt is a 409, not a 400, since it's a state-dependent
     // conflict rather than malformed input.
     @Transactional
-    public AppointmentResponse updateStatus(UUID tenantId, UUID adminId, UUID id, AppointmentStatus newStatus) {
+    public AppointmentResponse updateStatus(
+            UUID tenantId, UUID adminId, UUID id, UpdateAppointmentStatusRequest request) {
+        AppointmentStatus newStatus = request.status();
+        // A cancelled or no-show appointment wasn't paid - a method there
+        // is a client bug, not something to silently store.
+        if (request.paymentMethod() != null && newStatus != AppointmentStatus.COMPLETED) {
+            throw new ResponseStatusException(
+                    HttpStatus.BAD_REQUEST, "paymentMethod only applies when completing an appointment");
+        }
         Tenant tenant = getTenant(tenantId);
         ZoneId zone = ZoneId.of(tenant.getTimezone());
         Appointment appointment = getOwnedOrThrow(tenantId, id);
@@ -254,6 +262,7 @@ public class AppointmentService {
         if (newStatus == AppointmentStatus.COMPLETED) {
             appointment.setCompletedBy(adminId);
             appointment.setCompletedAt(Instant.now());
+            appointment.setPaymentMethod(request.paymentMethod());
         } else if (newStatus == AppointmentStatus.NO_SHOW) {
             appointment.setNoShowMarkedBy(adminId);
         }

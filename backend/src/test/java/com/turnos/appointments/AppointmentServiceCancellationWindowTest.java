@@ -207,4 +207,34 @@ class AppointmentServiceCancellationWindowTest {
                 () -> appointmentService.rescheduleAsCustomer(tenantId, customerId, appointmentId, request));
         assertEquals(AppointmentStatus.CONFIRMED, appointment.getStatus());
     }
+
+    // ENDPOINTS-PENDIENTES.md #3: "Cobrar este" records how it was paid.
+    @Test
+    void completingStoresThePaymentMethod() {
+        Appointment appointment = confirmedAppointment(customerId, Instant.now().minusSeconds(600));
+        when(appointmentRepository.findById(appointmentId)).thenReturn(Optional.of(appointment));
+
+        AppointmentResponse response = appointmentService.updateStatus(
+                tenantId,
+                UUID.randomUUID(),
+                appointmentId,
+                new UpdateAppointmentStatusRequest(AppointmentStatus.COMPLETED, PaymentMethod.TRANSFER));
+
+        assertEquals(PaymentMethod.TRANSFER, response.paymentMethod());
+    }
+
+    @Test
+    void paymentMethodIsRejectedOnANonCompletedTransition() {
+        Appointment appointment = confirmedAppointment(customerId, Instant.now().minusSeconds(600));
+        when(appointmentRepository.findById(appointmentId)).thenReturn(Optional.of(appointment));
+
+        assertThrows(
+                ResponseStatusException.class,
+                () -> appointmentService.updateStatus(
+                        tenantId,
+                        UUID.randomUUID(),
+                        appointmentId,
+                        new UpdateAppointmentStatusRequest(AppointmentStatus.CANCELLED, PaymentMethod.CASH)));
+        assertEquals(AppointmentStatus.CONFIRMED, appointment.getStatus());
+    }
 }
