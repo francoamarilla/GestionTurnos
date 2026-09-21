@@ -24,7 +24,8 @@ public record AppointmentResponse(
         UUID completedBy,
         UUID noShowMarkedBy,
         OffsetDateTime completedAt,
-        OffsetDateTime createdAt) {
+        OffsetDateTime createdAt,
+        String voidReason) {
 
     // Public: reused by SaleService (com.turnos.sales) - a sale is just an
     // Appointment with origin=DIRECT_SALE, no need for a near-duplicate DTO.
@@ -46,6 +47,7 @@ public record AppointmentResponse(
                 a.getCompletedBy(),
                 a.getNoShowMarkedBy(),
                 a.getCompletedAt() == null ? null : a.getCompletedAt().atZone(zone).toOffsetDateTime(),
-                a.getCreatedAt() == null ? null : a.getCreatedAt().atZone(zone).toOffsetDateTime());
+                a.getCreatedAt() == null ? null : a.getCreatedAt().atZone(zone).toOffsetDateTime(),
+                a.getVoidReason());
     }
 }

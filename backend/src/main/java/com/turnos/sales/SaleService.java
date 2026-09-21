@@ -102,7 +102,8 @@ public class SaleService {
             durationMinutes = catalogServiceMinutes(tenantId, request);
         }
 
-        UUID customerId = resolveCustomer(tenantId, request);
+        UUID customerId = resolveCustomer(
+                tenantId, request.customerId(), request.customerName(), request.customerPhone());
 
         OffsetDateTime startTime = request.startTime() != null ? request.startTime() : OffsetDateTime.now(zone);
         Instant startInstant = startTime.toInstant();
@@ -168,10 +169,58 @@ public class SaleService {
         return service.getDurationMinutes();
     }
 
-    private UUID resolveCustomer(UUID tenantId, CreateSaleRequest request) {
-        if (request.customerId() != null) {
+    // A sale is any COMPLETED appointment - a direct sale or a charged
+    // booking alike, both show up in Ventas.
+    @Transactional
+    public AppointmentResponse update(UUID tenantId, UUID id, UpdateSaleRequest request) {
+        ZoneId zone = ZoneId.of(getTenant(tenantId).getTimezone());
+        Appointment sale = getSaleOrThrow(tenantId, id);
+
+        // Keeping the customer it already has is fine even if they were
+        // deactivated since; only a newly picked one must be active.
+        UUID customerId = request.customerId() != null && request.customerId().equals(sale.getCustomerId())
+                ? sale.getCustomerId()
+                : resolveCustomer(tenantId, request.customerId(), request.customerName(), request.customerPhone());
+
+        sale.setPrice(request.price());
+        sale.setPaymentMethod(request.paymentMethod());
+        sale.setCustomerId(customerId);
+        return AppointmentResponse.from(appointmentRepository.save(sale), zone);
+    }
+
+    // COMPLETED -> VOIDED: drops out of every total (they all count
+    // COMPLETED) and frees the professional's time (V13).
+    @Transactional
+    public AppointmentResponse voidSale(UUID tenantId, UUID adminId, UUID id, VoidSaleRequest request) {
+        ZoneId zone = ZoneId.of(getTenant(tenantId).getTimezone());
+        Appointment sale = getSaleOrThrow(tenantId, id);
+
+        String reason = request == null || request.reason() == null ? null : request.reason().strip();
+        sale.setStatus(AppointmentStatus.VOIDED);
+        sale.setVoidReason(reason == null || reason.isEmpty() ? null : reason);
+        sale.setVoidedBy(adminId);
+        sale.setVoidedAt(Instant.now());
+        return AppointmentResponse.from(appointmentRepository.save(sale), zone);
+    }
+
+    private Appointment getSaleOrThrow(UUID tenantId, UUID id) {
+        Appointment sale = appointmentRepository
+                .findById(id)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Sale not found"));
+        if (!sale.getBranchId().equals(getBranch(tenantId).getId())) {
+            throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Sale not found");
+        }
+        // Voided, or never charged: nothing to correct.
+        if (sale.getStatus() != AppointmentStatus.COMPLETED) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT, "Only a completed sale can be edited or voided");
+        }
+        return sale;
+    }
+
+    private UUID resolveCustomer(UUID tenantId, UUID customerId, String customerName, String customerPhone) {
+        if (customerId != null) {
             var customer = customerRepository
-                    .findById(request.customerId())
+                    .findById(customerId)
                     .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Customer not found"));
             if (!customer.getTenantId().equals(tenantId)) {
                 throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Customer not found");
@@ -181,9 +230,9 @@ public class SaleService {
             }
             return customer.getId();
         }
-        if (request.customerName() != null || request.customerPhone() != null) {
-            CustomerResponse created = customerService.create(
-                    tenantId, new CreateCustomerRequest(request.customerPhone(), request.customerName(), null));
+        if (customerName != null || customerPhone != null) {
+            CustomerResponse created =
+                    customerService.create(tenantId, new CreateCustomerRequest(customerPhone, customerName, null));
             return created.id();
         }
         return null;

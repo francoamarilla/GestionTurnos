@@ -155,7 +155,7 @@ public class StatisticsService {
     private record OccupancyResult(double overallRate, List<ProfessionalOccupancy> byProfessional) {
     }
 
-    // "Horas de turnos reservados" = every non-CANCELLED appointment (the
+    // "Horas de turnos reservados" = every non-CANCELLED/VOIDED appointment (the
     // same exclusion used everywhere else in the spec, e.g. the DB overlap
     // constraint). "Disponibilidad real" = the professional's configured
     // weekly hours ∩ the branch's, minus branch closures for that date - the
@@ -176,7 +176,8 @@ public class StatisticsService {
                 .collect(Collectors.toSet());
 
         Map<UUID, Long> bookedMinutesByProfessional = periodAppointments.stream()
-                .filter(a -> a.getStatus() != AppointmentStatus.CANCELLED)
+                .filter(a -> a.getStatus() != AppointmentStatus.CANCELLED
+                        && a.getStatus() != AppointmentStatus.VOIDED)
                 .collect(Collectors.groupingBy(Appointment::getProfessionalId, Collectors.summingLong(Appointment::getDurationMinutes)));
 
         List<ProfessionalOccupancy> byProfessional = new ArrayList<>();

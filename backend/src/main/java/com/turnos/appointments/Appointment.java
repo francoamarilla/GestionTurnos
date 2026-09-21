@@ -69,6 +69,12 @@ public class Appointment {
 
     private Instant completedAt;
 
+    private String voidReason;
+
+    private UUID voidedBy;
+
+    private Instant voidedAt;
+
     @CreationTimestamp
     private Instant createdAt;
 }

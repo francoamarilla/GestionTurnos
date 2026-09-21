@@ -146,7 +146,9 @@ public class AvailabilityService {
         List<Appointment> sameDayAppointments =
                 appointmentRepository.findByProfessionalIdAndStartTimeLessThanAndEndTimeGreaterThan(
                         professionalId, dayEnd, dayStart);
-        sameDayAppointments.removeIf(a -> a.getStatus() == AppointmentStatus.CANCELLED);
+        // Same rule as the appointment_no_overlap constraint (V13).
+        sameDayAppointments.removeIf(a -> a.getStatus() == AppointmentStatus.CANCELLED
+                || a.getStatus() == AppointmentStatus.VOIDED);
 
         List<OffsetDateTime> slots = new ArrayList<>();
         for (int cursor = openMinutes; cursor + durationMinutes <= closeMinutes; cursor += durationMinutes) {
