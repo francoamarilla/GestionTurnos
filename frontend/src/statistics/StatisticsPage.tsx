@@ -319,8 +319,9 @@ export default function StatisticsPage() {
       const list = completed.filter((a) => a.serviceId === id);
       const value = list.reduce((sum, a) => sum + Number(a.price), 0);
       return {
-        key: id,
-        label: meta.services.get(id) ?? "Servicio",
+        key: id ?? "otro",
+        // null = sales off the catalog, one "Otro" row (ENDPOINTS-PENDIENTES #5).
+        label: id ? (meta.services.get(id) ?? "Servicio") : "Otro",
         value,
         detail: `${list.length} ${list.length === 1 ? "vez" : "veces"} · ${totalSales ? Math.round((value / totalSales) * 100) : 0}% del total`,
       };

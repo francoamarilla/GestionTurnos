@@ -277,7 +277,7 @@ function CustomerSheet({
                       {date > today ? date.split("-").reverse().slice(0, 2).join("/") : ago(daysBetween(date, today))}
                     </span>
                     <span className="what">
-                      {names.services.get(a.serviceId) ?? "Servicio"} · {names.professionals.get(a.professionalId) ?? "—"}
+                      {a.description ?? (a.serviceId && names.services.get(a.serviceId)) ?? "Servicio"} · {names.professionals.get(a.professionalId) ?? "—"}
                     </span>
                     {a.status === "COMPLETED" ? (
                       <span className="p">{formatMoney(a.price)}</span>

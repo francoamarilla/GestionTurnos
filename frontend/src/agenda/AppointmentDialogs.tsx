@@ -427,7 +427,7 @@ export function AppointmentDetailDialog({
     return (
       <Dialog
         title="Reprogramar turno"
-        subtitle={`${service?.name ?? "Servicio"} con ${professional?.name ?? "profesional"}`}
+        subtitle={`${appointment.description ?? service?.name ?? "Servicio"} con ${professional?.name ?? "profesional"}`}
         width={520}
         onClose={onClose}
         footer={
@@ -468,7 +468,7 @@ export function AppointmentDetailDialog({
           <label>Horario</label>
           <SlotPicker
             professionalId={appointment.professionalId}
-            serviceId={appointment.serviceId}
+            serviceId={appointment.serviceId ?? ""}
             date={newDate}
             timezone={catalog.timezone}
             selected={slot}
@@ -481,7 +481,7 @@ export function AppointmentDetailDialog({
 
   return (
     <Dialog
-      title={service?.name ?? "Turno"}
+      title={appointment.description ?? service?.name ?? "Turno"}
       subtitle={longDate(appointment.startTime.slice(0, 10))}
       width={440}
       onClose={onClose}

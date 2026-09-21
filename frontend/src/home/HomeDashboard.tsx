@@ -254,7 +254,8 @@ function AdminHome() {
   }
 
   const { catalog, now, today } = data;
-  const serviceName = (a: Appointment) => catalog.services.find((s) => s.id === a.serviceId)?.name ?? "Servicio";
+  const serviceName = (a: Appointment) =>
+    a.description ?? catalog.services.find((s) => s.id === a.serviceId)?.name ?? "Servicio";
   const professionalName = (id: string) => catalog.professionals.find((p) => p.id === id)?.name ?? "Profesional";
   const clientName = (a: Appointment) =>
     a.customerId ? customerLabel(catalog.customers.find((c) => c.id === a.customerId)) : null;

@@ -77,6 +77,9 @@ const PAYMENT: Record<PaymentMethod, { label: string; short: string; variant: "p
 };
 const PAYMENT_METHODS = Object.keys(PAYMENT) as PaymentMethod[];
 
+// Service select value for a sale off the catalog (sent as serviceId null).
+const OTHER = "other";
+
 function csvCell(value: string | number): string {
   const text = String(value);
   return /[";\n]/.test(text) ? `"${text.replace(/"/g, '""')}"` : text;
@@ -108,7 +111,8 @@ function SaleDialog({
     catalog.services.filter((s) => s.active && catalog.assignments.get(id)?.includes(s.id));
 
   const [professionalId, setProfessionalId] = useState(activeProfessionals[0]?.id ?? "");
-  const [serviceId, setServiceId] = useState(offered(activeProfessionals[0]?.id ?? "")[0]?.id ?? "");
+  const [serviceId, setServiceId] = useState(offered(activeProfessionals[0]?.id ?? "")[0]?.id ?? OTHER);
+  const [description, setDescription] = useState("");
   const [price, setPrice] = useState<string>(String(offered(activeProfessionals[0]?.id ?? "")[0]?.price ?? ""));
   const [customer, setCustomer] = useState<PickedCustomer>(null);
   const [payment, setPayment] = useState<PaymentMethod>("CASH");
@@ -133,7 +137,7 @@ function SaleDialog({
   const services = offered(professionalId);
   const amount = Number(price);
   const nameOf = (a: Appointment) => ({
-    service: catalog.services.find((s) => s.id === a.serviceId)?.name ?? "Servicio",
+    service: a.description ?? catalog.services.find((s) => s.id === a.serviceId)?.name ?? "Servicio",
     professional: catalog.professionals.find((p) => p.id === a.professionalId)?.name ?? "Profesional",
     customer: a.customerId ? customerLabel(catalog.customers.get(a.customerId)) : "Cliente ocasional",
   });
@@ -154,7 +158,8 @@ function SaleDialog({
       const isPhone = customer?.kind === "new" && /^[+\d\s()-]{6,}$/.test(customer.text);
       await api.post("/sales", {
         professionalId,
-        serviceId,
+        serviceId: serviceId === OTHER ? null : serviceId,
+        description: serviceId === OTHER ? description.trim() : null,
         price: amount,
         customerId: customer?.kind === "existing" ? customer.customer.id : null,
         customerName: customer?.kind === "new" && !isPhone ? customer.text : null,
@@ -175,7 +180,8 @@ function SaleDialog({
   }
 
   const priceOk = price !== "" && amount >= 0;
-  const valid = priceOk && (linked || (professionalId && serviceId));
+  const valid =
+    priceOk && (linked || (professionalId && (serviceId !== OTHER || description.trim() !== "")));
 
   // The price field is shared: linking loads the booked price, unlinking
   // goes back to the selected service's.
@@ -203,7 +209,9 @@ function SaleDialog({
       <span className="help">
         {linked
           ? `Se reservó a ${formatMoney(linked.price)}. Cambialo si hiciste un descuento.`
-          : "Viene del servicio, pero lo podés cambiar si hiciste un descuento."}
+          : serviceId === OTHER
+            ? "Lo que cobraste por esto."
+            : "Viene del servicio, pero lo podés cambiar si hiciste un descuento."}
       </span>
     </div>
   );
@@ -273,7 +281,7 @@ function SaleDialog({
               onChange={(e) => {
                 const first = offered(e.target.value)[0];
                 setProfessionalId(e.target.value);
-                setServiceId(first?.id ?? "");
+                setServiceId(first?.id ?? OTHER);
                 setPrice(first ? String(first.price) : "");
               }}
             >
@@ -289,21 +297,33 @@ function SaleDialog({
             <select
               id="sale-srv"
               value={serviceId}
-              disabled={services.length === 0}
               onChange={(e) => {
                 setServiceId(e.target.value);
                 const service = services.find((s) => s.id === e.target.value);
-                if (service) setPrice(String(service.price));
+                // "Otro" has no list price: leave it for the admin to type.
+                setPrice(service ? String(service.price) : "");
               }}
             >
-              {services.length === 0 && <option value="">No tiene servicios activos</option>}
               {services.map((s) => (
                 <option key={s.id} value={s.id}>
                   {s.name} · {formatMoney(s.price)}
                 </option>
               ))}
+              <option value={OTHER}>Otro (a definir)</option>
             </select>
           </div>
+          {serviceId === OTHER && (
+            <div className="field">
+              <label htmlFor="sale-desc">Qué se vendió</label>
+              <input
+                id="sale-desc"
+                maxLength={120}
+                placeholder="Ej.: pomada, lavado, arreglo de barba"
+                value={description}
+                onChange={(e) => setDescription(e.target.value)}
+              />
+            </div>
+          )}
           {priceField}
           <div className="field">
             <label htmlFor="appt-customer">Cliente</label>
@@ -400,7 +420,8 @@ export default function SalesPage() {
   const professional = (id: string) => catalog.professionals.find((p) => p.id === id);
   const colorOf = (id: string) =>
     PROFESSIONAL_COLORS[Math.max(0, catalog.professionals.findIndex((p) => p.id === id)) % PROFESSIONAL_COLORS.length];
-  const serviceName = (id: string) => catalog.services.find((s) => s.id === id)?.name ?? "Servicio";
+  const serviceName = (a: Appointment) =>
+    a.description ?? catalog.services.find((s) => s.id === a.serviceId)?.name ?? "Servicio";
   const customerOf = (a: Appointment) => (a.customerId ? catalog.customers.get(a.customerId) : undefined);
 
   const byDay = new Map<string, Appointment[]>();
@@ -417,7 +438,7 @@ export default function SalesPage() {
         a.startTime.slice(0, 10),
         timeOf(a.startTime),
         professional(a.professionalId)?.name ?? "",
-        serviceName(a.serviceId),
+        serviceName(a),
         a.origin === "DIRECT_SALE" ? "Venta directa" : "Turno",
         a.customerId ? customerLabel(customerOf(a)) : "Ocasional",
         a.paymentMethod ? PAYMENT[a.paymentMethod].label : "",
@@ -559,7 +580,7 @@ export default function SalesPage() {
                           </span>
                         </td>
                         <td className="grow">
-                          {serviceName(a.serviceId)}
+                          {serviceName(a)}
                           {a.origin === "DIRECT_SALE" && <span className="linked"> · sin turno</span>}
                         </td>
                         <td className="hide-sm">

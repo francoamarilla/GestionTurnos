@@ -337,7 +337,7 @@ export default function AgendaPage() {
                           onClick={() => setDialog({ kind: "detail", appointment: a })}
                         >
                           <span className="t">{timeOf(a.startTime)}</span>
-                          <span className="s">{service?.name ?? "Servicio"}</span>
+                          <span className="s">{a.description ?? service?.name ?? "Servicio"}</span>
                           <span className="c">{a.customerId ? customerLabel(customer) : "Sin cliente"}</span>
                         </button>
                       );

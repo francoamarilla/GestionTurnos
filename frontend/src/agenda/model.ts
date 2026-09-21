@@ -30,7 +30,8 @@ export interface Customer {
 export interface Appointment {
   id: string;
   professionalId: string;
-  serviceId: string;
+  serviceId: string | null; // null = sale off the catalog ("Otro")...
+  description: string | null; // ...named by this instead
   customerId: string | null;
   startTime: string; // OffsetDateTime, already in the tenant's own timezone
   durationMinutes: number;
