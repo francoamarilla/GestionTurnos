@@ -143,8 +143,12 @@ function SaleDialog({
     setError(null);
     try {
       if (linked) {
-        await api.patch(`/appointments/${linked.id}/status`, { status: "COMPLETED", paymentMethod: payment });
-        onSaved(`Turno de las ${timeOf(linked.startTime)} cobrado`);
+        await api.patch(`/appointments/${linked.id}/status`, {
+          status: "COMPLETED",
+          paymentMethod: payment,
+          price: amount,
+        });
+        onSaved(`Turno de las ${timeOf(linked.startTime)} cobrado: ${formatMoney(amount)}`);
         return;
       }
       const isPhone = customer?.kind === "new" && /^[+\d\s()-]{6,}$/.test(customer.text);
@@ -170,7 +174,39 @@ function SaleDialog({
     }
   }
 
-  const valid = linked || (professionalId && serviceId && price !== "" && amount >= 0);
+  const priceOk = price !== "" && amount >= 0;
+  const valid = priceOk && (linked || (professionalId && serviceId));
+
+  // The price field is shared: linking loads the booked price, unlinking
+  // goes back to the selected service's.
+  function link(appointment: Appointment | null) {
+    setLinked(appointment);
+    const service = services.find((s) => s.id === serviceId);
+    setPrice(String(appointment ? appointment.price : (service?.price ?? "")));
+  }
+
+  const priceField = (
+    <div className="field">
+      <label htmlFor="sale-price">Precio cobrado</label>
+      <div className="input-affix prefix money">
+        <span>$</span>
+        <input
+          id="sale-price"
+          type="number"
+          min={0}
+          step="0.01"
+          inputMode="decimal"
+          value={price}
+          onChange={(e) => setPrice(e.target.value)}
+        />
+      </div>
+      <span className="help">
+        {linked
+          ? `Se reservó a ${formatMoney(linked.price)}. Cambialo si hiciste un descuento.`
+          : "Viene del servicio, pero lo podés cambiar si hiciste un descuento."}
+      </span>
+    </div>
+  );
   const shown = linked ? nameOf(linked) : null;
 
   return (
@@ -187,7 +223,7 @@ function SaleDialog({
           <button type="button" className="secondary" onClick={onClose}>
             Cancelar
           </button>
-          <span className="tot">{formatMoney(linked ? linked.price : amount || 0)}</span>
+          <span className="tot">{formatMoney(amount || 0)}</span>
         </>
       }
     >
@@ -204,11 +240,11 @@ function SaleDialog({
             </span>
           </div>
           {linked ? (
-            <button type="button" className="secondary sm" onClick={() => setLinked(null)}>
+            <button type="button" className="secondary sm" onClick={() => link(null)}>
               Desvincular
             </button>
           ) : (
-            <button type="button" className="secondary sm" onClick={() => setLinked(candidate)}>
+            <button type="button" className="secondary sm" onClick={() => link(candidate)}>
               Cobrar este
             </button>
           )}
@@ -224,10 +260,8 @@ function SaleDialog({
             <dd>{shown.service}</dd>
             <dt>Cliente</dt>
             <dd>{shown.customer}</dd>
-            <dt>Precio</dt>
-            <dd>{formatMoney(linked.price)}</dd>
           </dl>
-          <span className="help">Se marca el turno como completado con el precio con el que se reservó.</span>
+          {priceField}
         </>
       ) : (
         <>
@@ -270,22 +304,7 @@ function SaleDialog({
               ))}
             </select>
           </div>
-          <div className="field">
-            <label htmlFor="sale-price">Precio cobrado</label>
-            <div className="input-affix prefix money">
-              <span>$</span>
-              <input
-                id="sale-price"
-                type="number"
-                min={0}
-                step="0.01"
-                inputMode="decimal"
-                value={price}
-                onChange={(e) => setPrice(e.target.value)}
-              />
-            </div>
-            <span className="help">Viene del servicio, pero lo podés cambiar si hiciste un descuento.</span>
-          </div>
+          {priceField}
           <div className="field">
             <label htmlFor="appt-customer">Cliente</label>
             <CustomerCombo value={customer} onChange={setCustomer} placeholder="Buscá por nombre, o dejalo vacío" />
