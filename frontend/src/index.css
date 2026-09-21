@@ -727,7 +727,8 @@ dialog.sheet::backdrop {
   border-radius: 0 0 14px 14px;
 }
 
-.field > label {
+.field > label,
+.field > .label {
   font-size: 13px;
   font-weight: 600;
 }

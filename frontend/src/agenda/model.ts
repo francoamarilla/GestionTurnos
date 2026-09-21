@@ -37,7 +37,10 @@ export interface Appointment {
   price: number;
   status: AppointmentStatus;
   origin: "BOT" | "DASHBOARD" | "DIRECT_SALE";
+  paymentMethod: PaymentMethod | null; // null = not recorded
 }
+
+export type PaymentMethod = "CASH" | "TRANSFER" | "CARD";
 
 export interface DaySchedule {
   dayOfWeek: DayOfWeek;

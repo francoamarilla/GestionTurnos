@@ -11,9 +11,11 @@ import {
   toMinutes,
   type Appointment,
   type Customer,
+  type PaymentMethod,
   type Professional,
   type Service,
 } from "../agenda/model";
+import { Badge } from "../components/Badge";
 import { Dialog } from "../components/Dialog";
 import { Delta, RangeBar, SplitBar, StatTile } from "../components/ReportKit";
 import {
@@ -67,6 +69,14 @@ function loadSales(range: { from: string; to: string }, professionalId: string) 
 
 const sum = (list: Appointment[]) => list.reduce((total, a) => total + Number(a.price), 0);
 
+// Hues from Mockups/ventas-stats-mockup.html: pine / brick / amber.
+const PAYMENT: Record<PaymentMethod, { label: string; short: string; variant: "pine" | "brick" | "amber" }> = {
+  CASH: { label: "Efectivo", short: "Efec.", variant: "pine" },
+  TRANSFER: { label: "Transferencia", short: "Transf.", variant: "brick" },
+  CARD: { label: "Tarjeta", short: "Tarj.", variant: "amber" },
+};
+const PAYMENT_METHODS = Object.keys(PAYMENT) as PaymentMethod[];
+
 function csvCell(value: string | number): string {
   const text = String(value);
   return /[";\n]/.test(text) ? `"${text.replace(/"/g, '""')}"` : text;
@@ -101,6 +111,7 @@ function SaleDialog({
   const [serviceId, setServiceId] = useState(offered(activeProfessionals[0]?.id ?? "")[0]?.id ?? "");
   const [price, setPrice] = useState<string>(String(offered(activeProfessionals[0]?.id ?? "")[0]?.price ?? ""));
   const [customer, setCustomer] = useState<PickedCustomer>(null);
+  const [payment, setPayment] = useState<PaymentMethod>("CASH");
   // "Cobrar este": today's latest confirmed appointment that already started.
   const [candidate, setCandidate] = useState<Appointment | null>(null);
   const [linked, setLinked] = useState<Appointment | null>(null);
@@ -132,7 +143,7 @@ function SaleDialog({
     setError(null);
     try {
       if (linked) {
-        await api.patch(`/appointments/${linked.id}/status`, { status: "COMPLETED" });
+        await api.patch(`/appointments/${linked.id}/status`, { status: "COMPLETED", paymentMethod: payment });
         onSaved(`Turno de las ${timeOf(linked.startTime)} cobrado`);
         return;
       }
@@ -144,6 +155,7 @@ function SaleDialog({
         customerId: customer?.kind === "existing" ? customer.customer.id : null,
         customerName: customer?.kind === "new" && !isPhone ? customer.text : null,
         customerPhone: customer?.kind === "new" && isPhone ? customer.text : null,
+        paymentMethod: payment,
       });
       onSaved(`Venta de ${formatMoney(amount)} registrada`);
     } catch (err) {
@@ -281,6 +293,19 @@ function SaleDialog({
           </div>
         </>
       )}
+
+      <div className="field">
+        <span className="label" id="sale-pay">
+          Cómo pagó
+        </span>
+        <div className="chip-row" role="group" aria-labelledby="sale-pay">
+          {PAYMENT_METHODS.map((m) => (
+            <button key={m} type="button" className="chip" aria-pressed={payment === m} onClick={() => setPayment(m)}>
+              {PAYMENT[m].label}
+            </button>
+          ))}
+        </div>
+      </div>
     </Dialog>
   );
 }
@@ -350,7 +375,9 @@ export default function SalesPage() {
   const previous = data?.previous ?? null;
   const total = sum(sales);
   const average = sales.length ? total / sales.length : 0;
-  const direct = sales.filter((a) => a.origin === "DIRECT_SALE");
+  const paidWith = (m: PaymentMethod | null) => sum(sales.filter((a) => a.paymentMethod === m));
+  const unrecorded = paidWith(null);
+  const share = (value: number) => (total ? Math.round((value / total) * 100) : 0);
   const professional = (id: string) => catalog.professionals.find((p) => p.id === id);
   const colorOf = (id: string) =>
     PROFESSIONAL_COLORS[Math.max(0, catalog.professionals.findIndex((p) => p.id === id)) % PROFESSIONAL_COLORS.length];
@@ -366,7 +393,7 @@ export default function SalesPage() {
 
   function exportCsv() {
     downloadCsv(`ventas_${range!.from}_${range!.to}.csv`, [
-      ["Fecha", "Hora", "Profesional", "Servicio", "Origen", "Cliente", "Precio"],
+      ["Fecha", "Hora", "Profesional", "Servicio", "Origen", "Cliente", "Pago", "Precio"],
       ...[...sales].reverse().map((a) => [
         a.startTime.slice(0, 10),
         timeOf(a.startTime),
@@ -374,6 +401,7 @@ export default function SalesPage() {
         serviceName(a.serviceId),
         a.origin === "DIRECT_SALE" ? "Venta directa" : "Turno",
         a.customerId ? customerLabel(customerOf(a)) : "Ocasional",
+        a.paymentMethod ? PAYMENT[a.paymentMethod].label : "",
         Number(a.price),
       ]),
     ]);
@@ -435,12 +463,17 @@ export default function SalesPage() {
             )}
           </StatTile>
           <div className="panel stat-tile">
-            <span className="lab">De dónde vino</span>
+            <span className="lab">Cómo pagó</span>
             <SplitBar
-              label="Origen de lo cobrado"
+              label="Medio de pago de lo cobrado"
               parts={[
-                { label: `Turnos ${total ? Math.round(((total - sum(direct)) / total) * 100) : 0}%`, value: total - sum(direct), color: "var(--pine)" },
-                { label: `Venta directa ${total ? Math.round((sum(direct) / total) * 100) : 0}%`, value: sum(direct), color: "var(--brick)" },
+                ...PAYMENT_METHODS.map((m) => ({
+                  label: `${PAYMENT[m].short} ${share(paidWith(m))}%`,
+                  value: paidWith(m),
+                  color: `var(--${PAYMENT[m].variant})`,
+                })),
+                // Sales from before #3, and turnos completed from Agenda/Inicio.
+                ...(unrecorded ? [{ label: `Sin dato ${share(unrecorded)}%`, value: unrecorded, color: "var(--slate)" }] : []),
               ]}
             />
           </div>
@@ -476,6 +509,7 @@ export default function SalesPage() {
                   <th>Profesional</th>
                   <th>Servicio</th>
                   <th className="hide-sm">Cliente</th>
+                  <th className="hide-sm">Pago</th>
                   <th className="num">Precio</th>
                   <th>
                     <span className="sr-only">Acciones</span>
@@ -489,7 +523,7 @@ export default function SalesPage() {
                       <td colSpan={3}>
                         {shortDate(day)} · {list.length} {list.length === 1 ? "venta" : "ventas"}
                       </td>
-                      <td className="hide-sm" />
+                      <td className="hide-sm" colSpan={2} />
                       <td className="num">{formatMoney(sum(list))}</td>
                       <td />
                     </tr>
@@ -511,6 +545,13 @@ export default function SalesPage() {
                         </td>
                         <td className="hide-sm">
                           {a.customerId ? customerLabel(customer) : <span className="muted">Ocasional</span>}
+                        </td>
+                        <td className="hide-sm">
+                          {a.paymentMethod ? (
+                            <Badge variant={PAYMENT[a.paymentMethod].variant}>{PAYMENT[a.paymentMethod].label}</Badge>
+                          ) : (
+                            <span className="muted">—</span>
+                          )}
                         </td>
                         <td className="num">{formatMoney(a.price)}</td>
                         <td>
@@ -536,7 +577,7 @@ export default function SalesPage() {
                   <td colSpan={3}>
                     Total del período · {sales.length} {sales.length === 1 ? "venta" : "ventas"}
                   </td>
-                  <td className="hide-sm" />
+                  <td className="hide-sm" colSpan={2} />
                   <td className="num">{formatMoney(total)}</td>
                   <td />
                 </tr>
