@@ -60,6 +60,12 @@ public class SaleService {
         this.tenantRepository = tenantRepository;
     }
 
+    // "Otro" has no service to take a duration from; it still occupies the
+    // professional (overlap constraint), so it gets a short fixed slot.
+    // ponytail: fixed 15 min, add a duration field if "Otro" turns out to be
+    // long work (a special color) more than a product.
+    static final int OFF_CATALOG_MINUTES = 15;
+
     // Doesn't reuse AvailabilityService's grid-based slot check (unlike
     // regular booking): a walk-in is recorded at whatever moment it actually
     // happened, not constrained to an artificial slot grid. The non-overlap
@@ -83,33 +89,29 @@ public class SaleService {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Professional is not active");
         }
 
-        var service = serviceRepository
-                .findById(request.serviceId())
-                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Service not found"));
-        if (!service.getTenantId().equals(tenantId)) {
-            throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Service not found");
-        }
-        if (!service.isActive()) {
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Service is not active");
-        }
-
-        boolean offersService = professionalServiceAssignmentRepository
-                .findByProfessionalId(request.professionalId()).stream()
-                .anyMatch(a -> a.getServiceId().equals(request.serviceId()));
-        if (!offersService) {
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Professional does not offer this service");
+        String description = null;
+        int durationMinutes;
+        if (request.serviceId() == null) {
+            if (request.description() == null || request.description().isBlank()) {
+                throw new ResponseStatusException(
+                        HttpStatus.BAD_REQUEST, "A sale without a service needs a description");
+            }
+            description = request.description().strip();
+            durationMinutes = OFF_CATALOG_MINUTES;
+        } else {
+            durationMinutes = catalogServiceMinutes(tenantId, request);
         }
 
         UUID customerId = resolveCustomer(tenantId, request);
 
         OffsetDateTime startTime = request.startTime() != null ? request.startTime() : OffsetDateTime.now(zone);
         Instant startInstant = startTime.toInstant();
-        int durationMinutes = service.getDurationMinutes();
 
         Appointment appointment = new Appointment();
         appointment.setBranchId(professional.getBranchId());
         appointment.setProfessionalId(request.professionalId());
         appointment.setServiceId(request.serviceId());
+        appointment.setDescription(description);
         appointment.setCustomerId(customerId);
         appointment.setStartTime(startInstant);
         appointment.setEndTime(startInstant.plusSeconds(durationMinutes * 60L));
@@ -143,6 +145,27 @@ public class SaleService {
                 .search(branch.getId(), fromInstant, toInstant, professionalId, AppointmentStatus.COMPLETED).stream()
                 .map(a -> AppointmentResponse.from(a, zone))
                 .toList();
+    }
+
+    // Validates the catalog service and returns its duration.
+    private int catalogServiceMinutes(UUID tenantId, CreateSaleRequest request) {
+        var service = serviceRepository
+                .findById(request.serviceId())
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Service not found"));
+        if (!service.getTenantId().equals(tenantId)) {
+            throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Service not found");
+        }
+        if (!service.isActive()) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Service is not active");
+        }
+
+        boolean offersService = professionalServiceAssignmentRepository
+                .findByProfessionalId(request.professionalId()).stream()
+                .anyMatch(a -> a.getServiceId().equals(request.serviceId()));
+        if (!offersService) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Professional does not offer this service");
+        }
+        return service.getDurationMinutes();
     }
 
     private UUID resolveCustomer(UUID tenantId, CreateSaleRequest request) {

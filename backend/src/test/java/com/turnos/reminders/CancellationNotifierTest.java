@@ -91,6 +91,7 @@ class CancellationNotifierTest extends AbstractIntegrationTest {
                 UUID.randomUUID(),
                 UUID.randomUUID(),
                 UUID.randomUUID(),
+                null,
                 customerId,
                 OffsetDateTime.now(ZoneOffset.UTC),
                 30,

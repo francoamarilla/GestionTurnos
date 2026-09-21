@@ -33,7 +33,11 @@ public class Appointment {
 
     private UUID professionalId;
 
+    // Null only for a direct sale of something off the catalog; then
+    // description names it (V12).
     private UUID serviceId;
+
+    private String description;
 
     private UUID customerId;
 

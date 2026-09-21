@@ -25,6 +25,7 @@ import java.util.EnumMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
 import java.util.stream.Collectors;
@@ -93,10 +94,13 @@ public class StatisticsService {
                 .map(e -> new ProfessionalAmount(e.getKey(), e.getValue()))
                 .toList();
 
+        // Off-catalog sales ("Otro", no serviceId) count together as one
+        // row with serviceId null. groupingBy rejects null keys, hence the
+        // Optional.
         List<ServiceCount> topServices = completed.stream()
-                .collect(Collectors.groupingBy(Appointment::getServiceId, Collectors.counting()))
+                .collect(Collectors.groupingBy(a -> Optional.ofNullable(a.getServiceId()), Collectors.counting()))
                 .entrySet().stream()
-                .map(e -> new ServiceCount(e.getKey(), e.getValue()))
+                .map(e -> new ServiceCount(e.getKey().orElse(null), e.getValue()))
                 .sorted((a, b) -> Long.compare(b.count(), a.count()))
                 .toList();
 
