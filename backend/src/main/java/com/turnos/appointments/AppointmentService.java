@@ -241,11 +241,12 @@ public class AppointmentService {
     public AppointmentResponse updateStatus(
             UUID tenantId, UUID adminId, UUID id, UpdateAppointmentStatusRequest request) {
         AppointmentStatus newStatus = request.status();
-        // A cancelled or no-show appointment wasn't paid - a method there
-        // is a client bug, not something to silently store.
-        if (request.paymentMethod() != null && newStatus != AppointmentStatus.COMPLETED) {
+        // A cancelled or no-show appointment wasn't paid - a method or a
+        // price there is a client bug, not something to silently store.
+        if ((request.paymentMethod() != null || request.price() != null)
+                && newStatus != AppointmentStatus.COMPLETED) {
             throw new ResponseStatusException(
-                    HttpStatus.BAD_REQUEST, "paymentMethod only applies when completing an appointment");
+                    HttpStatus.BAD_REQUEST, "paymentMethod and price only apply when completing an appointment");
         }
         Tenant tenant = getTenant(tenantId);
         ZoneId zone = ZoneId.of(tenant.getTimezone());
@@ -263,6 +264,9 @@ public class AppointmentService {
             appointment.setCompletedBy(adminId);
             appointment.setCompletedAt(Instant.now());
             appointment.setPaymentMethod(request.paymentMethod());
+            // What was actually charged (a discount); the booked price
+            // stays otherwise.
+            if (request.price() != null) appointment.setPrice(request.price());
         } else if (newStatus == AppointmentStatus.NO_SHOW) {
             appointment.setNoShowMarkedBy(adminId);
         }

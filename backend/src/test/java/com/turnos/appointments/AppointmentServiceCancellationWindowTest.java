@@ -218,9 +218,40 @@ class AppointmentServiceCancellationWindowTest {
                 tenantId,
                 UUID.randomUUID(),
                 appointmentId,
-                new UpdateAppointmentStatusRequest(AppointmentStatus.COMPLETED, PaymentMethod.TRANSFER));
+                new UpdateAppointmentStatusRequest(AppointmentStatus.COMPLETED, PaymentMethod.TRANSFER, null));
 
         assertEquals(PaymentMethod.TRANSFER, response.paymentMethod());
+        assertEquals(BigDecimal.TEN, response.price()); // no price sent: the booked one
+    }
+
+    // #4: charging with a discount overrides the booked price.
+    @Test
+    void completingWithAPriceChargesThatPrice() {
+        Appointment appointment = confirmedAppointment(customerId, Instant.now().minusSeconds(600));
+        when(appointmentRepository.findById(appointmentId)).thenReturn(Optional.of(appointment));
+
+        AppointmentResponse response = appointmentService.updateStatus(
+                tenantId,
+                UUID.randomUUID(),
+                appointmentId,
+                new UpdateAppointmentStatusRequest(AppointmentStatus.COMPLETED, null, new BigDecimal("7")));
+
+        assertEquals(new BigDecimal("7"), response.price());
+    }
+
+    @Test
+    void priceIsRejectedOnANonCompletedTransition() {
+        Appointment appointment = confirmedAppointment(customerId, Instant.now().minusSeconds(600));
+        when(appointmentRepository.findById(appointmentId)).thenReturn(Optional.of(appointment));
+
+        assertThrows(
+                ResponseStatusException.class,
+                () -> appointmentService.updateStatus(
+                        tenantId,
+                        UUID.randomUUID(),
+                        appointmentId,
+                        new UpdateAppointmentStatusRequest(AppointmentStatus.NO_SHOW, null, BigDecimal.ONE)));
+        assertEquals(BigDecimal.TEN, appointment.getPrice());
     }
 
     @Test
@@ -234,7 +265,7 @@ class AppointmentServiceCancellationWindowTest {
                         tenantId,
                         UUID.randomUUID(),
                         appointmentId,
-                        new UpdateAppointmentStatusRequest(AppointmentStatus.CANCELLED, PaymentMethod.CASH)));
+                        new UpdateAppointmentStatusRequest(AppointmentStatus.CANCELLED, PaymentMethod.CASH, null)));
         assertEquals(AppointmentStatus.CONFIRMED, appointment.getStatus());
     }
 }
