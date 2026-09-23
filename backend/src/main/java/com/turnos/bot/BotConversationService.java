@@ -15,6 +15,7 @@ import com.turnos.professionals.ProfessionalServiceAssignment;
 import com.turnos.professionals.ProfessionalServiceAssignmentRepository;
 import com.turnos.services.Service;
 import com.turnos.services.ServiceRepository;
+import com.turnos.tenancy.Tenant;
 import com.turnos.tenancy.TenantRepository;
 import com.turnos.tenancy.TenantSessionContext;
 import com.turnos.whatsapp.WhatsAppIntegration;
@@ -232,6 +233,16 @@ public class BotConversationService {
     }
 
     private void startBooking(UUID tenantId, String businessNumber, String phone, BotConversationState state) {
+        // "Permitir reservas online" off (#6): the customer can still look
+        // up or cancel what they already have, they just can't book here.
+        if (!tenantRepository.findById(tenantId).orElseThrow().isOnlineBookingEnabled()) {
+            botConversationStateRepository.save(state);
+            whatsAppProvider.sendText(
+                    businessNumber,
+                    phone,
+                    "Por ahora los turnos se sacan directamente con el negocio. Escribí \"hablar con alguien\" y te contestan.");
+            return;
+        }
         state.getCollectedData().put(MODE_KEY, MODE_BOOK);
         state.setCurrentStep(BotStep.BOOKING_SELECT_SERVICE);
         resetFailures(state);
@@ -459,12 +470,18 @@ public class BotConversationService {
         boolean showProfessionalName =
                 OPTION_ANY_PROFESSIONAL.equals(professionalSelection) && candidates.size() > 1;
 
-        ZoneId zone = ZoneId.of(
-                tenantRepository.findById(tenantId).orElseThrow().getTimezone());
+        Tenant tenant = tenantRepository.findById(tenantId).orElseThrow();
+        ZoneId zone = ZoneId.of(tenant.getTimezone());
         LocalDate today = LocalDate.now(zone);
 
+        // "Se puede reservar hasta" (#6): null = sin límite, so the bot's
+        // own 14-day search window is the only cap.
+        int searchDays = tenant.getBookingHorizonDays() == null
+                ? BOOKING_SEARCH_DAYS
+                : Math.min(BOOKING_SEARCH_DAYS, tenant.getBookingHorizonDays());
+
         List<SlotOption> options = new ArrayList<>();
-        for (int dayOffset = 0; dayOffset < BOOKING_SEARCH_DAYS; dayOffset++) {
+        for (int dayOffset = 0; dayOffset < searchDays; dayOffset++) {
             LocalDate date = today.plusDays(dayOffset);
             for (Professional professional : candidates) {
                 for (OffsetDateTime slot :

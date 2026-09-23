@@ -38,6 +38,21 @@ public class Tenant {
 
     private String timezone;
 
+    private String address;
+
+    // Null = sin límite: how far ahead a customer may book (V14).
+    private Integer bookingHorizonDays;
+
+    // Defaults mirror V14's, which only apply to rows Hibernate doesn't
+    // write a value for - and it always does.
+    private Integer slotIntervalMinutes = 30;
+
+    private boolean onlineBookingEnabled = true;
+
+    // 24 h and 2 h reminders; the confirmation and the cancellation notice
+    // are not reminders and always go out.
+    private boolean remindersEnabled = true;
+
     @CreationTimestamp
     private Instant createdAt;
 }

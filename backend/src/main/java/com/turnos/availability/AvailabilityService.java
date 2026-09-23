@@ -150,8 +150,13 @@ public class AvailabilityService {
         sameDayAppointments.removeIf(a -> a.getStatus() == AppointmentStatus.CANCELLED
                 || a.getStatus() == AppointmentStatus.VOIDED);
 
+        // Every service starts on the tenant's own grid (#6), so a 20-minute
+        // service on a 30-minute grid offers 9:00, 9:30, ... not 9:00, 9:20.
+        // Older tenants have no value yet: fall back to the old behaviour.
+        int step = tenant.getSlotIntervalMinutes() != null ? tenant.getSlotIntervalMinutes() : durationMinutes;
+
         List<OffsetDateTime> slots = new ArrayList<>();
-        for (int cursor = openMinutes; cursor + durationMinutes <= closeMinutes; cursor += durationMinutes) {
+        for (int cursor = openMinutes; cursor + durationMinutes <= closeMinutes; cursor += step) {
             LocalTime slotTime = LocalTime.of(cursor / 60, cursor % 60);
             ZonedDateTime slotStartZoned = date.atTime(slotTime).atZone(zone);
             Instant slotStart = slotStartZoned.toInstant();

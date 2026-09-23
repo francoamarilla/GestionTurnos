@@ -78,6 +78,8 @@ class AvailabilityServiceTest {
     private AppointmentRepository appointmentRepository;
 
     private AvailabilityService availabilityService;
+    private Tenant tenant;
+    private Service service;
 
     private final UUID tenantId = UUID.randomUUID();
     private final UUID branchId = UUID.randomUUID();
@@ -99,7 +101,7 @@ class AvailabilityServiceTest {
                 serviceRepository,
                 appointmentRepository);
 
-        Tenant tenant = new Tenant();
+        tenant = new Tenant();
         tenant.setId(tenantId);
         tenant.setTimezone(zone.getId());
         when(tenantRepository.findById(tenantId)).thenReturn(Optional.of(tenant));
@@ -115,7 +117,7 @@ class AvailabilityServiceTest {
         branch.setTenantId(tenantId);
         when(branchRepository.findById(branchId)).thenReturn(Optional.of(branch));
 
-        Service service = new Service();
+        service = new Service();
         service.setId(serviceId);
         service.setTenantId(tenantId);
         service.setActive(true);
@@ -144,6 +146,33 @@ class AvailabilityServiceTest {
         assertEquals(18, slots.size());
         assertEquals(LocalTime.of(9, 0), slots.get(0).toLocalTime());
         assertEquals(LocalTime.of(17, 30), slots.get(slots.size() - 1).toLocalTime());
+    }
+
+    // ENDPOINTS-PENDIENTES.md #6: every service starts on the tenant's grid.
+    @Test
+    void startsSlotsOnTheTenantsGridNotOnTheServiceDuration() {
+        service.setDurationMinutes(20);
+        tenant.setSlotIntervalMinutes(30);
+
+        List<OffsetDateTime> slots = availabilityService.getAvailability(tenantId, professionalId, serviceId, monday);
+
+        assertEquals(LocalTime.of(9, 0), slots.get(0).toLocalTime());
+        assertEquals(LocalTime.of(9, 30), slots.get(1).toLocalTime());
+        // 9:00 to 18:00, one start every 30 minutes, the last one at 17:30.
+        assertEquals(18, slots.size());
+        assertEquals(LocalTime.of(17, 30), slots.get(slots.size() - 1).toLocalTime());
+    }
+
+    @Test
+    void aFinerGridOffersMoreStartsForTheSameService() {
+        tenant.setSlotIntervalMinutes(15);
+
+        List<OffsetDateTime> slots = availabilityService.getAvailability(tenantId, professionalId, serviceId, monday);
+
+        assertEquals(LocalTime.of(9, 15), slots.get(1).toLocalTime());
+        // 30-minute service: the last one that still fits starts at 17:30.
+        assertEquals(LocalTime.of(17, 30), slots.get(slots.size() - 1).toLocalTime());
+        assertEquals(35, slots.size());
     }
 
     @Test

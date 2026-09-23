@@ -48,7 +48,10 @@ public class ReminderSweepJob {
     // sweeps racing each other over the same appointment.
     @Scheduled(fixedDelayString = "${app.reminders.sweep-interval-ms:600000}")
     public void sweep() {
-        for (UUID tenantId : listAllTenantIds()) {
+        // A tenant with reminders off (#6) is skipped entirely: the switch
+        // covers both the 24 h and the 2 h notice. Confirmations and
+        // cancellations aren't reminders and don't go through here.
+        for (UUID tenantId : listTenantIdsWithRemindersOn()) {
             try {
                 reminderTenantSweeper.sweepTenant(tenantId, ACTIVE_RULES);
             } catch (RuntimeException ex) {
@@ -73,10 +76,13 @@ public class ReminderSweepJob {
     // BotConversationService: this only reads, there's nothing pending to
     // flush, and flush() itself requires an active transaction - which a
     // plain read through this non-@Transactional method never opens.
-    private List<UUID> listAllTenantIds() {
+    private List<UUID> listTenantIdsWithRemindersOn() {
         try {
             tenantSessionContext.apply(true, null);
-            return tenantRepository.findAll().stream().map(Tenant::getId).toList();
+            return tenantRepository.findAll().stream()
+                    .filter(Tenant::isRemindersEnabled)
+                    .map(Tenant::getId)
+                    .toList();
         } finally {
             tenantSessionContext.reset();
         }

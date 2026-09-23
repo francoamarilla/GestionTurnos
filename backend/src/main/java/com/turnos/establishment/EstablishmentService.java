@@ -8,9 +8,11 @@ import com.turnos.tenancy.Tenant;
 import com.turnos.tenancy.TenantRepository;
 import com.turnos.whatsapp.WhatsAppIntegrationRepository;
 import java.time.DayOfWeek;
+import java.time.ZoneId;
 import java.util.EnumMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.UUID;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
@@ -19,6 +21,9 @@ import org.springframework.web.server.ResponseStatusException;
 
 @Service
 public class EstablishmentService {
+
+    // Same set as the V14 CHECK constraint.
+    private static final Set<Integer> SLOT_INTERVALS = Set.of(15, 30, 60);
 
     private final TenantRepository tenantRepository;
     private final BranchRepository branchRepository;
@@ -55,6 +60,35 @@ public class EstablishmentService {
         }
         if (request.cancellationWindowHours() != null) {
             tenant.setCancellationWindowHours(request.cancellationWindowHours());
+        }
+        if (request.address() != null) {
+            tenant.setAddress(request.address().isBlank() ? null : request.address().strip());
+        }
+        if (request.timezone() != null) {
+            if (!ZoneId.getAvailableZoneIds().contains(request.timezone())) {
+                throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Unknown timezone: " + request.timezone());
+            }
+            tenant.setTimezone(request.timezone());
+        }
+        if (request.bookingHorizonDays() != null) {
+            int days = request.bookingHorizonDays();
+            if (days < 0) {
+                throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "bookingHorizonDays cannot be negative");
+            }
+            tenant.setBookingHorizonDays(days == 0 ? null : days);
+        }
+        if (request.slotIntervalMinutes() != null) {
+            if (!SLOT_INTERVALS.contains(request.slotIntervalMinutes())) {
+                throw new ResponseStatusException(
+                        HttpStatus.BAD_REQUEST, "slotIntervalMinutes must be one of " + SLOT_INTERVALS);
+            }
+            tenant.setSlotIntervalMinutes(request.slotIntervalMinutes());
+        }
+        if (request.onlineBookingEnabled() != null) {
+            tenant.setOnlineBookingEnabled(request.onlineBookingEnabled());
+        }
+        if (request.remindersEnabled() != null) {
+            tenant.setRemindersEnabled(request.remindersEnabled());
         }
         tenantRepository.save(tenant);
 
@@ -123,7 +157,12 @@ public class EstablishmentService {
         return new EstablishmentResponse(
                 tenant.getBusinessName(),
                 tenant.getContactPhone(),
+                tenant.getAddress(),
                 tenant.getCancellationWindowHours(),
+                tenant.getBookingHorizonDays(),
+                tenant.getSlotIntervalMinutes(),
+                tenant.isOnlineBookingEnabled(),
+                tenant.isRemindersEnabled(),
                 tenant.getTimezone(),
                 schedule);
     }
