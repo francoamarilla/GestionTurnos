@@ -35,7 +35,12 @@ interface ApiDaySchedule {
 interface EstablishmentResponse {
   businessName: string;
   contactPhone: string | null;
+  address: string | null;
   cancellationWindowHours: number;
+  bookingHorizonDays: number | null; // null = sin límite
+  slotIntervalMinutes: number;
+  onlineBookingEnabled: boolean;
+  remindersEnabled: boolean;
   timezone: string;
   schedule: ApiDaySchedule[];
 }
@@ -64,7 +69,13 @@ interface Day {
 interface Draft {
   businessName: string;
   contactPhone: string;
+  address: string;
+  timezone: string;
   cancellationWindowHours: number;
+  bookingHorizonDays: number; // 0 = sin límite, as the API reads it
+  slotIntervalMinutes: number;
+  onlineBookingEnabled: boolean;
+  remindersEnabled: boolean;
   schedule: Day[];
 }
 
@@ -72,7 +83,13 @@ function toDraft(establishment: EstablishmentResponse): Draft {
   return {
     businessName: establishment.businessName,
     contactPhone: establishment.contactPhone ?? "",
+    address: establishment.address ?? "",
+    timezone: establishment.timezone,
     cancellationWindowHours: establishment.cancellationWindowHours,
+    bookingHorizonDays: establishment.bookingHorizonDays ?? 0,
+    slotIntervalMinutes: establishment.slotIntervalMinutes,
+    onlineBookingEnabled: establishment.onlineBookingEnabled,
+    remindersEnabled: establishment.remindersEnabled,
     schedule: WEEK.map(({ key, label }) => {
       const day = establishment.schedule.find((d) => d.dayOfWeek === key);
       return {
@@ -92,7 +109,13 @@ function toPayload(draft: Draft) {
   return {
     businessName: draft.businessName.trim(),
     contactPhone: draft.contactPhone.trim() || null,
+    address: draft.address.trim(),
+    timezone: draft.timezone,
     cancellationWindowHours: draft.cancellationWindowHours,
+    bookingHorizonDays: draft.bookingHorizonDays,
+    slotIntervalMinutes: draft.slotIntervalMinutes,
+    onlineBookingEnabled: draft.onlineBookingEnabled,
+    remindersEnabled: draft.remindersEnabled,
     schedule: draft.schedule.map((day) => ({
       dayOfWeek: day.dayOfWeek,
       openTime: day.closed ? null : `${day.openTime}:00`,
@@ -108,7 +131,13 @@ function changeCount(draft: Draft, base: Draft): number {
   let changes = 0;
   if (draft.businessName.trim() !== base.businessName.trim()) changes++;
   if (draft.contactPhone.trim() !== base.contactPhone.trim()) changes++;
+  if (draft.address.trim() !== base.address.trim()) changes++;
+  if (draft.timezone !== base.timezone) changes++;
   if (draft.cancellationWindowHours !== base.cancellationWindowHours) changes++;
+  if (draft.bookingHorizonDays !== base.bookingHorizonDays) changes++;
+  if (draft.slotIntervalMinutes !== base.slotIntervalMinutes) changes++;
+  if (draft.onlineBookingEnabled !== base.onlineBookingEnabled) changes++;
+  if (draft.remindersEnabled !== base.remindersEnabled) changes++;
   changes += draft.schedule.filter((day, i) => {
     const before = base.schedule[i];
     return (
@@ -136,6 +165,22 @@ function zoneLabel(timezone: string): string {
 }
 
 const CANCEL_HOURS = [0, 1, 2, 4, 12, 24];
+
+const HORIZON_DAYS = [
+  { days: 7, label: "1 semana adelante" },
+  { days: 14, label: "2 semanas adelante" },
+  { days: 30, label: "1 mes adelante" },
+  { days: 0, label: "Sin límite" },
+];
+
+const SLOT_INTERVALS = [15, 30, 60];
+
+// The tenant's own zone plus every Argentine one, instead of the ~600 the
+// browser knows. ponytail: widen the filter if a tenant lands outside.
+function timezoneOptions(current: string): string[] {
+  const zones = Intl.supportedValuesOf("timeZone").filter((zone) => zone.startsWith("America/Argentina/"));
+  return zones.includes(current) ? zones : [current, ...zones];
+}
 
 function cancelLabel(hours: number): string {
   if (hours === 0) return "En cualquier momento";
@@ -324,7 +369,6 @@ export default function SettingsPage() {
   const toast = useToast();
   const [base, setBase] = useState<Draft | null>(null);
   const [draft, setDraft] = useState<Draft | null>(null);
-  const [timezone, setTimezone] = useState("");
   const [active, setActive] = useState(SECTIONS[0].id);
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
@@ -334,7 +378,6 @@ export default function SettingsPage() {
       .get<EstablishmentResponse>("/establishment")
       .then((establishment) => {
         setError(null);
-        setTimezone(establishment.timezone);
         setBase(toDraft(establishment));
         setDraft(toDraft(establishment));
       })
@@ -396,7 +439,6 @@ export default function SettingsPage() {
     setError(null);
     try {
       const updated = await api.patch<EstablishmentResponse>("/establishment", toPayload(draft));
-      setTimezone(updated.timezone);
       setBase(toDraft(updated));
       setDraft(toDraft(updated));
       toast("Configuración guardada");
@@ -455,13 +497,29 @@ export default function SettingsPage() {
                 <span className="help">Para que el cliente pueda llamarte desde el recordatorio.</span>
               </label>
             </div>
-            <label className="field">
-              <span>Zona horaria</span>
-              <input value={zoneLabel(timezone)} disabled />
-              <span className="help">
-                Toda la agenda se muestra en esta zona. Se define al dar de alta el negocio.
-              </span>
-            </label>
+            <div className="field-row">
+              <label className="field">
+                <span>Dirección</span>
+                <input
+                  value={draft.address}
+                  maxLength={200}
+                  placeholder="Av. Colón 1234, Córdoba"
+                  onChange={(e) => update({ address: e.target.value })}
+                />
+                <span className="help">Sale en el recordatorio, para que el cliente sepa dónde ir.</span>
+              </label>
+              <label className="field">
+                <span>Zona horaria</span>
+                <select value={draft.timezone} onChange={(e) => update({ timezone: e.target.value })}>
+                  {timezoneOptions(draft.timezone).map((zone) => (
+                    <option key={zone} value={zone}>
+                      {zoneLabel(zone)}
+                    </option>
+                  ))}
+                </select>
+                <span className="help">Toda la agenda se muestra en esta zona.</span>
+              </label>
+            </div>
           </div>
         </section>
 
@@ -525,14 +583,13 @@ export default function SettingsPage() {
           </div>
         </section>
 
-        {/* Un solo rango por día: el horario partido y el resto de las reglas
-            (horizonte de reserva, intervalo de la grilla, reservas online,
-            recordatorio 24 h) están en ENDPOINTS-PENDIENTES.md #6 y #7. */}
+        {/* Un solo rango por día: el horario partido sigue pendiente
+            (ENDPOINTS-PENDIENTES.md #7). */}
         <section className="panel" id="reglas">
           <div className="panel-head">
             <div>
               <h2>Reglas de turnos</h2>
-              <p>Cómo y cuándo pueden cancelar tus clientes por su cuenta.</p>
+              <p>Cómo reservan y cancelan tus clientes por su cuenta.</p>
             </div>
           </div>
           <div className="panel-body">
@@ -554,6 +611,70 @@ export default function SettingsPage() {
                   : "Pasado ese límite el cliente ya no cancela solo: tiene que escribirte."}
               </span>
             </label>
+            <div className="field-row">
+              <label className="field">
+                <span>Se puede reservar hasta</span>
+                <select
+                  value={draft.bookingHorizonDays}
+                  onChange={(e) => update({ bookingHorizonDays: Number(e.target.value) })}
+                >
+                  {HORIZON_DAYS.map(({ days, label }) => (
+                    <option key={days} value={days}>
+                      {label}
+                    </option>
+                  ))}
+                </select>
+                <span className="help">Evita que te llenen la agenda de meses que todavía no sabés si vas a trabajar.</span>
+              </label>
+              <label className="field">
+                <span>Cada cuánto arrancan los turnos</span>
+                <select
+                  value={draft.slotIntervalMinutes}
+                  onChange={(e) => update({ slotIntervalMinutes: Number(e.target.value) })}
+                >
+                  {SLOT_INTERVALS.map((minutes) => (
+                    <option key={minutes} value={minutes}>
+                      Cada {minutes} minutos
+                    </option>
+                  ))}
+                </select>
+                <span className="help">
+                  Con 15 minutos aprovechás mejor los huecos, pero se ofrecen más horarios para elegir.
+                </span>
+              </label>
+            </div>
+            <div className="week">
+              <div className="week-row">
+                <label className="sw">
+                  <input
+                    type="checkbox"
+                    checked={draft.onlineBookingEnabled}
+                    aria-label="Permitir reservas online"
+                    onChange={(e) => update({ onlineBookingEnabled: e.target.checked })}
+                  />
+                  <i aria-hidden="true" />
+                </label>
+                <span className="dname">
+                  <b>Permitir reservas online</b>
+                  <small>Si lo apagás, los turnos solo se cargan desde el panel.</small>
+                </span>
+              </div>
+              <div className="week-row">
+                <label className="sw">
+                  <input
+                    type="checkbox"
+                    checked={draft.remindersEnabled}
+                    aria-label="Avisar por WhatsApp antes del turno"
+                    onChange={(e) => update({ remindersEnabled: e.target.checked })}
+                  />
+                  <i aria-hidden="true" />
+                </label>
+                <span className="dname">
+                  <b>Avisar por WhatsApp antes del turno</b>
+                  <small>Recordatorios de 24 h y 2 h. Bajan los no-show.</small>
+                </span>
+              </div>
+            </div>
           </div>
         </section>
 
