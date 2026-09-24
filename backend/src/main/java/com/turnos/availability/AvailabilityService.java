@@ -115,30 +115,22 @@ public class AvailabilityService {
 
         DayOfWeek dayOfWeek = date.getDayOfWeek();
 
-        BranchSchedule branchDay = branchScheduleRepository.findByBranchId(branch.getId()).stream()
-                .filter(s -> s.getDayOfWeek() == dayOfWeek)
-                .findFirst()
-                .orElse(null);
-        if (branchDay == null || branchDay.isClosed() || branchDay.getOpenTime() == null || branchDay.getCloseTime() == null) {
+        // The professional works when both are open, range by range: with a
+        // split day (#7) that can be two windows, and an empty list means
+        // nobody works that day.
+        List<int[]> windows = workingWindows(
+                branchScheduleRepository.findByBranchId(branch.getId()).stream()
+                        .filter(s -> s.getDayOfWeek() == dayOfWeek)
+                        .map(s -> new int[] {minutesOf(s.getOpenTime()), minutesOf(s.getCloseTime())})
+                        .toList(),
+                professionalScheduleRepository.findByProfessionalId(professionalId).stream()
+                        .filter(s -> s.getDayOfWeek() == dayOfWeek)
+                        .map(s -> new int[] {minutesOf(s.getOpenTime()), minutesOf(s.getCloseTime())})
+                        .toList());
+        if (windows.isEmpty()) {
             return List.of();
         }
 
-        var professionalDay = professionalScheduleRepository.findByProfessionalId(professionalId).stream()
-                .filter(s -> s.getDayOfWeek() == dayOfWeek)
-                .findFirst()
-                .orElse(null);
-        if (professionalDay == null
-                || professionalDay.isClosed()
-                || professionalDay.getOpenTime() == null
-                || professionalDay.getCloseTime() == null) {
-            return List.of();
-        }
-
-        LocalTime openTime = laterOf(branchDay.getOpenTime(), professionalDay.getOpenTime());
-        LocalTime closeTime = earlierOf(branchDay.getCloseTime(), professionalDay.getCloseTime());
-
-        int openMinutes = openTime.getHour() * 60 + openTime.getMinute();
-        int closeMinutes = closeTime.getHour() * 60 + closeTime.getMinute();
         int durationMinutes = service.getDurationMinutes();
 
         Instant dayStart = date.atStartOfDay(zone).toInstant();
@@ -156,19 +148,44 @@ public class AvailabilityService {
         int step = tenant.getSlotIntervalMinutes() != null ? tenant.getSlotIntervalMinutes() : durationMinutes;
 
         List<OffsetDateTime> slots = new ArrayList<>();
-        for (int cursor = openMinutes; cursor + durationMinutes <= closeMinutes; cursor += step) {
-            LocalTime slotTime = LocalTime.of(cursor / 60, cursor % 60);
-            ZonedDateTime slotStartZoned = date.atTime(slotTime).atZone(zone);
-            Instant slotStart = slotStartZoned.toInstant();
-            Instant slotEnd = slotStart.plusSeconds(durationMinutes * 60L);
+        // The grid restarts on each window: an afternoon that opens at 16:00
+        // offers 16:00, not whatever the morning's rhythm landed on.
+        for (int[] window : windows) {
+            for (int cursor = window[0]; cursor + durationMinutes <= window[1]; cursor += step) {
+                LocalTime slotTime = LocalTime.of(cursor / 60, cursor % 60);
+                ZonedDateTime slotStartZoned = date.atTime(slotTime).atZone(zone);
+                Instant slotStart = slotStartZoned.toInstant();
+                Instant slotEnd = slotStart.plusSeconds(durationMinutes * 60L);
 
-            boolean conflict = sameDayAppointments.stream()
-                    .anyMatch(a -> a.getStartTime().isBefore(slotEnd) && slotStart.isBefore(a.getEndTime()));
-            if (!conflict) {
-                slots.add(slotStartZoned.toOffsetDateTime());
+                boolean conflict = sameDayAppointments.stream()
+                        .anyMatch(a -> a.getStartTime().isBefore(slotEnd) && slotStart.isBefore(a.getEndTime()));
+                if (!conflict) {
+                    slots.add(slotStartZoned.toOffsetDateTime());
+                }
             }
         }
         return slots;
+    }
+
+    // Every overlap of an open range with a worked range, in minutes from
+    // midnight. Public-ish so StatisticsService can count the same hours.
+    public static List<int[]> workingWindows(List<int[]> branchRanges, List<int[]> professionalRanges) {
+        List<int[]> windows = new ArrayList<>();
+        for (int[] open : branchRanges) {
+            for (int[] worked : professionalRanges) {
+                int start = Math.max(open[0], worked[0]);
+                int end = Math.min(open[1], worked[1]);
+                if (start < end) {
+                    windows.add(new int[] {start, end});
+                }
+            }
+        }
+        windows.sort((a, b) -> Integer.compare(a[0], b[0]));
+        return windows;
+    }
+
+    private static int minutesOf(LocalTime time) {
+        return time.getHour() * 60 + time.getMinute();
     }
 
     private LocalTime laterOf(LocalTime a, LocalTime b) {

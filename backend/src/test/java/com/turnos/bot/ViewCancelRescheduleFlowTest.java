@@ -199,8 +199,8 @@ class ViewCancelRescheduleFlowTest extends AbstractIntegrationTest {
 
     private void insertBranchSchedule(Connection connection, UUID branchId, DayOfWeek day) throws Exception {
         try (PreparedStatement ps = connection.prepareStatement(
-                "INSERT INTO branch_schedule (branch_id, day_of_week, open_time, close_time, is_closed) "
-                        + "VALUES (?, ?, '00:00', '23:45', false)")) {
+                "INSERT INTO branch_schedule (branch_id, day_of_week, open_time, close_time) "
+                        + "VALUES (?, ?, '00:00', '23:45')")) {
             ps.setObject(1, branchId);
             ps.setString(2, day.name());
             ps.execute();
@@ -221,8 +221,8 @@ class ViewCancelRescheduleFlowTest extends AbstractIntegrationTest {
     private void insertProfessionalSchedule(Connection connection, UUID professionalId, DayOfWeek day)
             throws Exception {
         try (PreparedStatement ps = connection.prepareStatement(
-                "INSERT INTO professional_schedule (professional_id, day_of_week, open_time, close_time, is_closed) "
-                        + "VALUES (?, ?, '00:00', '23:45', false)")) {
+                "INSERT INTO professional_schedule (professional_id, day_of_week, open_time, close_time) "
+                        + "VALUES (?, ?, '00:00', '23:45')")) {
             ps.setObject(1, professionalId);
             ps.setString(2, day.name());
             ps.execute();

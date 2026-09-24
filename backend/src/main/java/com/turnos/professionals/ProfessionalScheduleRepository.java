@@ -4,7 +4,7 @@ import java.util.List;
 import java.util.UUID;
 import org.springframework.data.jpa.repository.JpaRepository;
 
-public interface ProfessionalScheduleRepository extends JpaRepository<ProfessionalSchedule, ProfessionalScheduleId> {
+public interface ProfessionalScheduleRepository extends JpaRepository<ProfessionalSchedule, UUID> {
 
     List<ProfessionalSchedule> findByProfessionalId(UUID professionalId);
 

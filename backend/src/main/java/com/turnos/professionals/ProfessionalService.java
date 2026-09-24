@@ -8,6 +8,8 @@ import com.turnos.tenancy.Branch;
 import com.turnos.tenancy.BranchRepository;
 import java.time.DayOfWeek;
 import java.time.Instant;
+import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.EnumMap;
 import java.util.List;
 import java.util.Map;
@@ -108,17 +110,14 @@ public class ProfessionalService {
 
     public List<DaySchedule> getSchedule(UUID tenantId, UUID professionalId) {
         Professional professional = getOwnedOrThrow(tenantId, professionalId);
-        Map<DayOfWeek, ProfessionalSchedule> byDay = new EnumMap<>(DayOfWeek.class);
+        Map<DayOfWeek, List<TimeRange>> byDay = new EnumMap<>(DayOfWeek.class);
         for (ProfessionalSchedule s : professionalScheduleRepository.findByProfessionalId(professional.getId())) {
-            byDay.put(s.getDayOfWeek(), s);
+            byDay.computeIfAbsent(s.getDayOfWeek(), d -> new ArrayList<>())
+                    .add(new TimeRange(s.getOpenTime(), s.getCloseTime()));
         }
+        byDay.values().forEach(ranges -> ranges.sort(Comparator.comparing(TimeRange::openTime)));
         return List.of(DayOfWeek.values()).stream()
-                .map(day -> {
-                    ProfessionalSchedule s = byDay.get(day);
-                    return s == null
-                            ? new DaySchedule(day, null, null, true)
-                            : new DaySchedule(day, s.getOpenTime(), s.getCloseTime(), s.isClosed());
-                })
+                .map(day -> new DaySchedule(day, byDay.getOrDefault(day, List.of())))
                 .toList();
     }
 
@@ -130,33 +129,56 @@ public class ProfessionalService {
     public List<DaySchedule> updateSchedule(UUID tenantId, UUID professionalId, List<DaySchedule> schedule) {
         Professional professional = getOwnedOrThrow(tenantId, professionalId);
 
+        validateWeek(schedule);
+
+        professionalScheduleRepository.deleteByProfessionalId(professional.getId());
+        professionalScheduleRepository.flush();
+        for (DaySchedule day : schedule) {
+            for (TimeRange range : day.ranges()) {
+                ProfessionalSchedule entity = new ProfessionalSchedule();
+                entity.setProfessionalId(professional.getId());
+                entity.setDayOfWeek(day.dayOfWeek());
+                entity.setOpenTime(range.openTime());
+                entity.setCloseTime(range.closeTime());
+                professionalScheduleRepository.save(entity);
+            }
+        }
+        return getSchedule(tenantId, professionalId);
+    }
+
+    // Same rules as the branch's own week (EstablishmentService): the 7
+    // days always travel together, and a day's ranges must be real and not
+    // step on each other.
+    static void validateWeek(List<DaySchedule> schedule) {
         Map<DayOfWeek, DaySchedule> byDay = new EnumMap<>(DayOfWeek.class);
         for (DaySchedule day : schedule) {
             if (byDay.put(day.dayOfWeek(), day) != null) {
                 throw new ResponseStatusException(
                         HttpStatus.BAD_REQUEST, "Duplicate day in schedule: " + day.dayOfWeek());
             }
-            if (!day.closed() && (day.openTime() == null || day.closeTime() == null)) {
-                throw new ResponseStatusException(
-                        HttpStatus.BAD_REQUEST, "openTime/closeTime required when not closed: " + day.dayOfWeek());
+            List<TimeRange> ranges = day.ranges() == null ? List.of() : day.ranges();
+            List<TimeRange> sorted = ranges.stream()
+                    .sorted(Comparator.comparing(TimeRange::openTime))
+                    .toList();
+            for (int i = 0; i < sorted.size(); i++) {
+                TimeRange range = sorted.get(i);
+                if (range.openTime() == null || range.closeTime() == null) {
+                    throw new ResponseStatusException(
+                            HttpStatus.BAD_REQUEST, "openTime/closeTime required in every range: " + day.dayOfWeek());
+                }
+                if (!range.openTime().isBefore(range.closeTime())) {
+                    throw new ResponseStatusException(
+                            HttpStatus.BAD_REQUEST, "A range must end after it starts: " + day.dayOfWeek());
+                }
+                if (i > 0 && range.openTime().isBefore(sorted.get(i - 1).closeTime())) {
+                    throw new ResponseStatusException(
+                            HttpStatus.BAD_REQUEST, "Overlapping ranges in " + day.dayOfWeek());
+                }
             }
         }
         if (byDay.size() != DayOfWeek.values().length) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Schedule must include all 7 days of the week");
         }
-
-        professionalScheduleRepository.deleteByProfessionalId(professional.getId());
-        professionalScheduleRepository.flush();
-        for (DaySchedule day : schedule) {
-            ProfessionalSchedule entity = new ProfessionalSchedule();
-            entity.setProfessionalId(professional.getId());
-            entity.setDayOfWeek(day.dayOfWeek());
-            entity.setClosed(day.closed());
-            entity.setOpenTime(day.closed() ? null : day.openTime());
-            entity.setCloseTime(day.closed() ? null : day.closeTime());
-            professionalScheduleRepository.save(entity);
-        }
-        return getSchedule(tenantId, professionalId);
     }
 
     public List<UUID> getAssignedServiceIds(UUID tenantId, UUID professionalId) {

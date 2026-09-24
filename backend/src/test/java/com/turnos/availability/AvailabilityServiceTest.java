@@ -220,17 +220,57 @@ class AvailabilityServiceTest {
         assertTrue(slots.isEmpty());
     }
 
+    // A day the branch doesn't open is a day with no ranges at all (V15).
     @Test
-    void dayMarkedClosedInBranchScheduleBlocksTheWholeDay() {
-        BranchSchedule closedMonday = new BranchSchedule();
-        closedMonday.setBranchId(branchId);
-        closedMonday.setDayOfWeek(DayOfWeek.MONDAY);
-        closedMonday.setClosed(true);
-        when(branchScheduleRepository.findByBranchId(branchId)).thenReturn(List.of(closedMonday));
+    void aDayWithNoBranchRangesBlocksTheWholeDay() {
+        when(branchScheduleRepository.findByBranchId(branchId)).thenReturn(List.of());
 
         List<OffsetDateTime> slots = availabilityService.getAvailability(tenantId, professionalId, serviceId, monday);
 
         assertTrue(slots.isEmpty());
+    }
+
+    // ENDPOINTS-PENDIENTES.md #7: a split day offers nothing at siesta time.
+    @Test
+    void aSplitDayLeavesTheMiddayGapOutOfTheOfferedSlots() {
+        when(branchScheduleRepository.findByBranchId(branchId))
+                .thenReturn(List.of(
+                        branchSchedule(DayOfWeek.MONDAY, LocalTime.of(9, 0), LocalTime.of(13, 0)),
+                        branchSchedule(DayOfWeek.MONDAY, LocalTime.of(16, 0), LocalTime.of(20, 0))));
+        when(professionalScheduleRepository.findByProfessionalId(professionalId))
+                .thenReturn(List.of(
+                        professionalSchedule(DayOfWeek.MONDAY, LocalTime.of(9, 0), LocalTime.of(13, 0)),
+                        professionalSchedule(DayOfWeek.MONDAY, LocalTime.of(16, 0), LocalTime.of(20, 0))));
+
+        List<LocalTime> times = availabilityService.getAvailability(tenantId, professionalId, serviceId, monday).stream()
+                .map(OffsetDateTime::toLocalTime)
+                .toList();
+
+        // 30-minute service: 9:00-12:30 and 16:00-19:30, nothing between.
+        assertEquals(LocalTime.of(9, 0), times.get(0));
+        assertEquals(LocalTime.of(12, 30), times.get(7));
+        assertEquals(LocalTime.of(16, 0), times.get(8));
+        assertEquals(LocalTime.of(19, 30), times.get(times.size() - 1));
+        assertEquals(16, times.size());
+    }
+
+    // The professional only does afternoons: the morning range drops out.
+    @Test
+    void onlyTheOverlapOfBranchAndProfessionalRangesIsOffered() {
+        when(branchScheduleRepository.findByBranchId(branchId))
+                .thenReturn(List.of(
+                        branchSchedule(DayOfWeek.MONDAY, LocalTime.of(9, 0), LocalTime.of(13, 0)),
+                        branchSchedule(DayOfWeek.MONDAY, LocalTime.of(16, 0), LocalTime.of(20, 0))));
+        when(professionalScheduleRepository.findByProfessionalId(professionalId))
+                .thenReturn(List.of(professionalSchedule(DayOfWeek.MONDAY, LocalTime.of(17, 0), LocalTime.of(20, 0))));
+
+        List<LocalTime> times = availabilityService.getAvailability(tenantId, professionalId, serviceId, monday).stream()
+                .map(OffsetDateTime::toLocalTime)
+                .toList();
+
+        assertEquals(LocalTime.of(17, 0), times.get(0));
+        assertEquals(LocalTime.of(19, 30), times.get(times.size() - 1));
+        assertEquals(6, times.size());
     }
 
     @Test
@@ -286,7 +326,6 @@ class AvailabilityServiceTest {
         s.setDayOfWeek(day);
         s.setOpenTime(open);
         s.setCloseTime(close);
-        s.setClosed(false);
         return s;
     }
 
@@ -296,7 +335,6 @@ class AvailabilityServiceTest {
         s.setDayOfWeek(day);
         s.setOpenTime(open);
         s.setCloseTime(close);
-        s.setClosed(false);
         return s;
     }
 }

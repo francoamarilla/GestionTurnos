@@ -1,7 +1,9 @@
 package com.turnos.professionals;
 
 import java.time.DayOfWeek;
-import java.time.LocalTime;
+import java.util.List;
 
-public record DaySchedule(DayOfWeek dayOfWeek, LocalTime openTime, LocalTime closeTime, boolean closed) {
+// A day with an empty ranges list is a day that isn't worked; a split day
+// carries more than one range (ENDPOINTS-PENDIENTES.md #7).
+public record DaySchedule(DayOfWeek dayOfWeek, List<TimeRange> ranges) {
 }

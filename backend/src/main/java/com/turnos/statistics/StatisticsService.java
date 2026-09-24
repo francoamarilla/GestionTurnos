@@ -3,6 +3,7 @@ package com.turnos.statistics;
 import com.turnos.appointments.Appointment;
 import com.turnos.appointments.AppointmentRepository;
 import com.turnos.appointments.AppointmentStatus;
+import com.turnos.availability.AvailabilityService;
 import com.turnos.professionals.Professional;
 import com.turnos.professionals.ProfessionalRepository;
 import com.turnos.professionals.ProfessionalSchedule;
@@ -166,9 +167,11 @@ public class StatisticsService {
         List<Professional> professionals =
                 professionalRepository.findByBranchId(branch.getId(), Pageable.unpaged()).getContent();
 
-        Map<DayOfWeek, BranchSchedule> branchScheduleByDay = new EnumMap<>(DayOfWeek.class);
+        Map<DayOfWeek, List<int[]>> branchScheduleByDay = new EnumMap<>(DayOfWeek.class);
         for (BranchSchedule s : branchScheduleRepository.findByBranchId(branch.getId())) {
-            branchScheduleByDay.put(s.getDayOfWeek(), s);
+            branchScheduleByDay
+                    .computeIfAbsent(s.getDayOfWeek(), d -> new ArrayList<>())
+                    .add(new int[] {minutesOf(s.getOpenTime()), minutesOf(s.getCloseTime())});
         }
         Set<LocalDate> closures = branchClosureRepository.findByBranchId(branch.getId()).stream()
                 .map(c -> c.getDate())
@@ -184,9 +187,11 @@ public class StatisticsService {
         long totalBooked = 0;
         long totalAvailable = 0;
         for (Professional professional : professionals) {
-            Map<DayOfWeek, ProfessionalSchedule> professionalScheduleByDay = new EnumMap<>(DayOfWeek.class);
+            Map<DayOfWeek, List<int[]>> professionalScheduleByDay = new EnumMap<>(DayOfWeek.class);
             for (ProfessionalSchedule s : professionalScheduleRepository.findByProfessionalId(professional.getId())) {
-                professionalScheduleByDay.put(s.getDayOfWeek(), s);
+                professionalScheduleByDay
+                        .computeIfAbsent(s.getDayOfWeek(), d -> new ArrayList<>())
+                        .add(new int[] {minutesOf(s.getOpenTime()), minutesOf(s.getCloseTime())});
             }
             long availableMinutes =
                     computeAvailableMinutes(from, to, branchScheduleByDay, professionalScheduleByDay, closures);
@@ -206,37 +211,27 @@ public class StatisticsService {
     private long computeAvailableMinutes(
             LocalDate from,
             LocalDate to,
-            Map<DayOfWeek, BranchSchedule> branchScheduleByDay,
-            Map<DayOfWeek, ProfessionalSchedule> professionalScheduleByDay,
+            Map<DayOfWeek, List<int[]>> branchScheduleByDay,
+            Map<DayOfWeek, List<int[]>> professionalScheduleByDay,
             Set<LocalDate> closures) {
         long totalMinutes = 0;
         for (LocalDate date = from; !date.isAfter(to); date = date.plusDays(1)) {
             if (closures.contains(date)) {
                 continue;
             }
-            BranchSchedule branchDay = branchScheduleByDay.get(date.getDayOfWeek());
-            if (branchDay == null || branchDay.isClosed() || branchDay.getOpenTime() == null || branchDay.getCloseTime() == null) {
-                continue;
-            }
-            ProfessionalSchedule professionalDay = professionalScheduleByDay.get(date.getDayOfWeek());
-            if (professionalDay == null
-                    || professionalDay.isClosed()
-                    || professionalDay.getOpenTime() == null
-                    || professionalDay.getCloseTime() == null) {
-                continue;
-            }
-            LocalTime open = laterOf(branchDay.getOpenTime(), professionalDay.getOpenTime());
-            LocalTime close = earlierOf(branchDay.getCloseTime(), professionalDay.getCloseTime());
-            long minutes = (close.toSecondOfDay() - open.toSecondOfDay()) / 60;
-            if (minutes > 0) {
-                totalMinutes += minutes;
+            // Same windows GET /api/availability works with, split days
+            // included (#7).
+            for (int[] window : AvailabilityService.workingWindows(
+                    branchScheduleByDay.getOrDefault(date.getDayOfWeek(), List.of()),
+                    professionalScheduleByDay.getOrDefault(date.getDayOfWeek(), List.of()))) {
+                totalMinutes += window[1] - window[0];
             }
         }
         return totalMinutes;
     }
 
-    private LocalTime laterOf(LocalTime a, LocalTime b) {
-        return a.isAfter(b) ? a : b;
+    private static int minutesOf(LocalTime time) {
+        return time.getHour() * 60 + time.getMinute();
     }
 
     private LocalTime earlierOf(LocalTime a, LocalTime b) {
