@@ -5,6 +5,7 @@ import jakarta.validation.Valid;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PatchMapping;
+import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
@@ -31,6 +32,11 @@ public class EstablishmentController {
             @AuthenticationPrincipal AuthenticatedPrincipal principal,
             @Valid @RequestBody UpdateEstablishmentRequest request) {
         return establishmentService.update(principal.tenantId(), request);
+    }
+
+    @PostMapping("/deactivate")
+    public EstablishmentResponse deactivate(@AuthenticationPrincipal AuthenticatedPrincipal principal) {
+        return establishmentService.deactivate(principal.tenantId());
     }
 
     @GetMapping("/whatsapp-integration")

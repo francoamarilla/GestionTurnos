@@ -17,6 +17,7 @@ import com.turnos.tenancy.Branch;
 import com.turnos.tenancy.BranchRepository;
 import com.turnos.tenancy.Tenant;
 import com.turnos.tenancy.TenantRepository;
+import com.turnos.tenancy.TenantStatus;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.time.OffsetDateTime;
@@ -74,6 +75,11 @@ public class SaleService {
     @Transactional
     public AppointmentResponse create(UUID tenantId, UUID adminId, CreateSaleRequest request) {
         Tenant tenant = getTenant(tenantId);
+        // Same rule as a new appointment: a closed business (#9) records
+        // nothing new, though old sales stay editable/voidable.
+        if (tenant.getStatus() == TenantStatus.SUSPENDED) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT, "Business is closed");
+        }
         ZoneId zone = ZoneId.of(tenant.getTimezone());
 
         Professional professional = professionalRepository
@@ -127,6 +133,12 @@ public class SaleService {
         try {
             appointment = appointmentRepository.saveAndFlush(appointment);
         } catch (DataIntegrityViolationException e) {
+            // Only the overlap constraint is a client problem. Reporting any
+            // integrity violation as an overlap hides real bugs behind a
+            // plausible 409 (it hid an FK violation once already).
+            if (!String.valueOf(e.getMostSpecificCause().getMessage()).contains("appointment_no_overlap")) {
+                throw e;
+            }
             throw new ResponseStatusException(
                     HttpStatus.CONFLICT, "That time overlaps an existing appointment for this professional", e);
         }

@@ -9,6 +9,7 @@ import com.turnos.tenancy.Branch;
 import com.turnos.tenancy.BranchRepository;
 import com.turnos.tenancy.Tenant;
 import com.turnos.tenancy.TenantRepository;
+import com.turnos.tenancy.TenantStatus;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.time.ZoneId;
@@ -65,6 +66,9 @@ public class AppointmentService {
     // public entry points are already @Transactional, so this just
     // participates in whichever transaction is already active.
     private Appointment createInternal(UUID tenantId, CreateAppointmentRequest request) {
+        // A closed business (#9) takes no new work, from the panel or the
+        // bot. Rescheduling goes through here too, on purpose.
+        requireOpen(tenantId);
         Professional professional = professionalRepository
                 .findById(request.professionalId())
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Professional not found"));
@@ -285,6 +289,14 @@ public class AppointmentService {
             throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Appointment not found");
         }
         return appointment;
+    }
+
+    // Shared with SaleService's own check; both are the ways a new
+    // appointment row is born.
+    private void requireOpen(UUID tenantId) {
+        if (getTenant(tenantId).getStatus() == TenantStatus.SUSPENDED) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT, "Business is closed");
+        }
     }
 
     private Tenant getTenant(UUID tenantId) {

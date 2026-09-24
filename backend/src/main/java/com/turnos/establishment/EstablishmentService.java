@@ -6,6 +6,7 @@ import com.turnos.tenancy.BranchSchedule;
 import com.turnos.tenancy.BranchScheduleRepository;
 import com.turnos.tenancy.Tenant;
 import com.turnos.tenancy.TenantRepository;
+import com.turnos.tenancy.TenantStatus;
 import com.turnos.whatsapp.WhatsAppIntegrationRepository;
 import java.time.DayOfWeek;
 import java.time.ZoneId;
@@ -99,6 +100,23 @@ public class EstablishmentService {
         return toResponse(tenant, branch);
     }
 
+    // "Cerrar el negocio en la plataforma" (ENDPOINTS-PENDIENTES.md #9).
+    // Nothing is deleted: the history stays readable, the tenant just stops
+    // taking new work - no online booking, and no new appointment or sale
+    // from the panel either (guarded in AppointmentService/SaleService).
+    // Only the Super Admin can bring it back (PATCH /api/admin/tenants/{id}).
+    @Transactional
+    public EstablishmentResponse deactivate(UUID tenantId) {
+        Tenant tenant = getTenant(tenantId);
+        if (tenant.getStatus() == TenantStatus.SUSPENDED) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT, "Business is already closed");
+        }
+        tenant.setStatus(TenantStatus.SUSPENDED);
+        tenant.setOnlineBookingEnabled(false);
+        tenantRepository.save(tenant);
+        return toResponse(tenant, getBranch(tenantId));
+    }
+
     // Onboarding/creation is intentionally not implemented (spec section 11:
     // "contrato de alta pendiente del BSP") - not RLS-backed (see V8
     // migration), so the tenantId filter here is the only isolation layer.
@@ -155,6 +173,7 @@ public class EstablishmentService {
                 .toList();
 
         return new EstablishmentResponse(
+                tenant.getStatus(),
                 tenant.getBusinessName(),
                 tenant.getContactPhone(),
                 tenant.getAddress(),
