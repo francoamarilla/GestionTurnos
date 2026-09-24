@@ -15,14 +15,14 @@ const WEEK: { key: DayOfWeek; label: string }[] = [
   { key: "SUNDAY", label: "Domingo" },
 ];
 
-// Section nav (mockup .subnav). "Cerrar el negocio" is not here: the Admin
-// can't deactivate its own tenant yet (ENDPOINTS-PENDIENTES.md #9).
+// Section nav (mockup .subnav).
 const SECTIONS = [
   { id: "negocio", label: "Negocio" },
   { id: "horarios", label: "Horarios" },
   { id: "reglas", label: "Reglas de turnos" },
   { id: "feriados", label: "Feriados y cierres" },
   { id: "whatsapp", label: "WhatsApp" },
+  { id: "cerrar", label: "Cerrar el negocio" },
 ];
 
 interface ApiDaySchedule {
@@ -33,6 +33,7 @@ interface ApiDaySchedule {
 }
 
 interface EstablishmentResponse {
+  status: "ACTIVE" | "SUSPENDED" | "TRIAL";
   businessName: string;
   contactPhone: string | null;
   address: string | null;
@@ -191,6 +192,64 @@ function closureLabel(date: string): string {
   const [y, m, d] = date.split("-").map(Number);
   return new Intl.DateTimeFormat("es-AR", { weekday: "short", day: "numeric", month: "short", year: "numeric" }).format(
     new Date(y, m - 1, d),
+  );
+}
+
+// ENDPOINTS-PENDIENTES.md #9. Typing the name is the confirmation: this
+// one can only be undone by us, not from the panel.
+function CloseBusinessSection({
+  businessName,
+  closed,
+  onClosed,
+}: {
+  businessName: string;
+  closed: boolean;
+  onClosed: () => void;
+}) {
+  const toast = useToast();
+  const [typed, setTyped] = useState("");
+  const [error, setError] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
+
+  async function close() {
+    setBusy(true);
+    setError(null);
+    try {
+      await api.post("/establishment/deactivate");
+      toast("El negocio quedó cerrado");
+      onClosed();
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : "No se pudo cerrar el negocio.");
+      setBusy(false);
+    }
+  }
+
+  return (
+    <section className="panel danger-zone" id="cerrar">
+      <div className="panel-head">
+        <div>
+          <h2>Cerrar el negocio en la plataforma</h2>
+          <p>
+            {closed
+              ? "El negocio está cerrado: no entran turnos nuevos ni ventas. Tus datos siguen acá."
+              : "Se apagan las reservas online y no se pueden cargar turnos ni ventas nuevas. Tus datos históricos quedan guardados."}
+          </p>
+        </div>
+      </div>
+      {!closed && (
+        <div className="panel-body">
+          {error && <p className="error-text">{error}</p>}
+          <label className="field">
+            <span>Escribí “{businessName}” para confirmar</span>
+            <input value={typed} onChange={(e) => setTyped(e.target.value)} autoComplete="off" />
+            <span className="help">Para volver a abrirlo tenés que escribirnos: no se reabre desde acá.</span>
+          </label>
+          <button type="button" disabled={busy || typed.trim() !== businessName} onClick={close}>
+            {busy ? "Cerrando…" : "Cerrar el negocio"}
+          </button>
+        </div>
+      )}
+    </section>
   );
 }
 
@@ -370,6 +429,7 @@ export default function SettingsPage() {
   const [base, setBase] = useState<Draft | null>(null);
   const [draft, setDraft] = useState<Draft | null>(null);
   const [active, setActive] = useState(SECTIONS[0].id);
+  const [status, setStatus] = useState<EstablishmentResponse["status"]>("ACTIVE");
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
 
@@ -378,6 +438,7 @@ export default function SettingsPage() {
       .get<EstablishmentResponse>("/establishment")
       .then((establishment) => {
         setError(null);
+        setStatus(establishment.status);
         setBase(toDraft(establishment));
         setDraft(toDraft(establishment));
       })
@@ -680,6 +741,11 @@ export default function SettingsPage() {
 
         <ClosuresSection />
         <WhatsAppSection />
+        <CloseBusinessSection
+          businessName={base.businessName}
+          closed={status === "SUSPENDED"}
+          onClosed={load}
+        />
       </div>
 
       {/* Save bar (mockup .savebar): rendered only while there is something to

@@ -1397,6 +1397,15 @@ button.appt.short {
   border-bottom: 1px solid var(--border);
 }
 
+/* Mockup .card.dz: the one section that can't be undone from here. */
+.panel.danger-zone {
+  border-color: color-mix(in srgb, var(--brick) 30%, var(--border));
+}
+
+.panel.danger-zone .panel-head {
+  border-bottom-color: color-mix(in srgb, var(--brick) 20%, var(--border));
+}
+
 .panel-head h2 {
   font-size: 14.5px;
   font-weight: 600;
