@@ -3462,6 +3462,19 @@ tr.total td {
   margin-left: auto;
 }
 
+/* Split days (#7): the ranges stack, "Agregar franja" under them. */
+.week-row .ranges {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 6px;
+  margin-left: auto;
+}
+
+.week-row .ranges .times {
+  margin-left: 0;
+}
+
 /* Feriados */
 .closure-form {
   display: grid;
@@ -3611,6 +3624,24 @@ tr.total td {
   }
 
   .closure-form {
+    grid-template-columns: 1fr;
+  }
+
+  /* No room for day + ranges side by side: the ranges take their own line. */
+  .week-row {
+    flex-wrap: wrap;
+  }
+
+  .week-row .ranges {
+    width: 100%;
+    align-items: flex-start;
+    margin-left: 0;
+  }
+}
+
+/* Phone: two fields side by side truncate their own values. */
+@media (max-width: 560px) {
+  .field-row {
     grid-template-columns: 1fr;
   }
 }
