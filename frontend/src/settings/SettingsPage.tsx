@@ -1,19 +1,9 @@
 import { useEffect, useState } from "react";
 import { api, ApiError } from "../api/client";
-import { toMinutes, type DayOfWeek } from "../agenda/model";
+import { type DaySchedule } from "../agenda/model";
 import { Badge } from "../components/Badge";
+import { toApiWeek, toDraftWeek, WeekRanges, weekProblem, type DraftDay } from "../components/WeekRanges";
 import { useToast } from "../components/Toast";
-
-// Monday-first, as the business thinks about its week.
-const WEEK: { key: DayOfWeek; label: string }[] = [
-  { key: "MONDAY", label: "Lunes" },
-  { key: "TUESDAY", label: "Martes" },
-  { key: "WEDNESDAY", label: "Miércoles" },
-  { key: "THURSDAY", label: "Jueves" },
-  { key: "FRIDAY", label: "Viernes" },
-  { key: "SATURDAY", label: "Sábado" },
-  { key: "SUNDAY", label: "Domingo" },
-];
 
 // Section nav (mockup .subnav).
 const SECTIONS = [
@@ -24,13 +14,6 @@ const SECTIONS = [
   { id: "whatsapp", label: "WhatsApp" },
   { id: "cerrar", label: "Cerrar el negocio" },
 ];
-
-interface ApiDaySchedule {
-  dayOfWeek: DayOfWeek;
-  openTime: string | null;
-  closeTime: string | null;
-  closed: boolean;
-}
 
 interface EstablishmentResponse {
   status: "ACTIVE" | "SUSPENDED" | "TRIAL";
@@ -43,7 +26,7 @@ interface EstablishmentResponse {
   onlineBookingEnabled: boolean;
   remindersEnabled: boolean;
   timezone: string;
-  schedule: ApiDaySchedule[];
+  schedule: DaySchedule[];
 }
 
 interface ClosureResponse {
@@ -57,16 +40,6 @@ interface WhatsAppIntegrationResponse {
   verificationStatus: string;
 }
 
-// A draft day always carries times, even while closed, so reopening a day
-// shows hours right away instead of two blank inputs.
-interface Day {
-  dayOfWeek: DayOfWeek;
-  label: string;
-  openTime: string; // HH:mm
-  closeTime: string; // HH:mm
-  closed: boolean;
-}
-
 interface Draft {
   businessName: string;
   contactPhone: string;
@@ -77,7 +50,7 @@ interface Draft {
   slotIntervalMinutes: number;
   onlineBookingEnabled: boolean;
   remindersEnabled: boolean;
-  schedule: Day[];
+  schedule: DraftDay[];
 }
 
 function toDraft(establishment: EstablishmentResponse): Draft {
@@ -91,16 +64,7 @@ function toDraft(establishment: EstablishmentResponse): Draft {
     slotIntervalMinutes: establishment.slotIntervalMinutes,
     onlineBookingEnabled: establishment.onlineBookingEnabled,
     remindersEnabled: establishment.remindersEnabled,
-    schedule: WEEK.map(({ key, label }) => {
-      const day = establishment.schedule.find((d) => d.dayOfWeek === key);
-      return {
-        dayOfWeek: key,
-        label,
-        openTime: (day?.openTime ?? "09:00").slice(0, 5),
-        closeTime: (day?.closeTime ?? "18:00").slice(0, 5),
-        closed: day?.closed ?? true,
-      };
-    }),
+    schedule: toDraftWeek(establishment.schedule),
   };
 }
 
@@ -117,17 +81,12 @@ function toPayload(draft: Draft) {
     slotIntervalMinutes: draft.slotIntervalMinutes,
     onlineBookingEnabled: draft.onlineBookingEnabled,
     remindersEnabled: draft.remindersEnabled,
-    schedule: draft.schedule.map((day) => ({
-      dayOfWeek: day.dayOfWeek,
-      openTime: day.closed ? null : `${day.openTime}:00`,
-      closeTime: day.closed ? null : `${day.closeTime}:00`,
-      closed: day.closed,
-    })),
+    schedule: toApiWeek(draft.schedule),
   };
 }
 
-// Fields actually changed, for the save bar's "N cambios pendientes". Times of
-// a day that is closed on both sides don't count - they aren't sent.
+// Fields actually changed, for the save bar's "N cambios pendientes"; a day
+// counts once however many of its ranges moved.
 function changeCount(draft: Draft, base: Draft): number {
   let changes = 0;
   if (draft.businessName.trim() !== base.businessName.trim()) changes++;
@@ -139,21 +98,10 @@ function changeCount(draft: Draft, base: Draft): number {
   if (draft.slotIntervalMinutes !== base.slotIntervalMinutes) changes++;
   if (draft.onlineBookingEnabled !== base.onlineBookingEnabled) changes++;
   if (draft.remindersEnabled !== base.remindersEnabled) changes++;
-  changes += draft.schedule.filter((day, i) => {
-    const before = base.schedule[i];
-    return (
-      day.closed !== before.closed ||
-      (!day.closed && (day.openTime !== before.openTime || day.closeTime !== before.closeTime))
-    );
-  }).length;
+  changes += draft.schedule.filter(
+    (day, i) => JSON.stringify(day.ranges) !== JSON.stringify(base.schedule[i].ranges),
+  ).length;
   return changes;
-}
-
-function hoursOf(day: Day): string {
-  if (day.closed) return "Cerrado";
-  const minutes = toMinutes(day.closeTime) - toMinutes(day.openTime);
-  if (minutes <= 0) return "Revisar horario";
-  return `${(minutes / 60).toFixed(minutes % 60 ? 1 : 0).replace(".", ",")} h`;
 }
 
 // "America/Argentina/Cordoba" -> "Cordoba (GMT-3)"
@@ -477,16 +425,11 @@ export default function SettingsPage() {
   }
 
   const update = (patch: Partial<Draft>) => setDraft({ ...draft, ...patch });
-  const updateDay = (dayOfWeek: DayOfWeek, patch: Partial<Day>) =>
-    update({ schedule: draft.schedule.map((day) => (day.dayOfWeek === dayOfWeek ? { ...day, ...patch } : day)) });
 
   const changes = changeCount(draft, base);
-  const badDay = draft.schedule.find((day) => !day.closed && toMinutes(day.openTime) >= toMinutes(day.closeTime));
   const problem = !draft.businessName.trim()
     ? "El nombre del negocio no puede quedar vacío."
-    : badDay
-      ? `${badDay.label}: el cierre tiene que ser posterior a la apertura.`
-      : null;
+    : weekProblem(draft.schedule);
 
   // The stored window may not be one of the presets (it's a free integer in
   // the API) - show it as its own option instead of silently changing it.
@@ -595,7 +538,7 @@ export default function SettingsPage() {
               className="secondary sm"
               onClick={() => {
                 const monday = draft.schedule[0];
-                update({ schedule: draft.schedule.map((day) => ({ ...monday, dayOfWeek: day.dayOfWeek, label: day.label })) });
+                update({ schedule: draft.schedule.map((day) => ({ ...day, ranges: monday.ranges })) });
                 toast("Se copió el horario del lunes a los 7 días");
               }}
             >
@@ -603,49 +546,14 @@ export default function SettingsPage() {
             </button>
           </div>
           <div className="panel-body">
-            <div className="week">
-              {draft.schedule.map((day) => (
-                <div key={day.dayOfWeek} className={`week-row${day.closed ? " off" : ""}`}>
-                  <label className="sw">
-                    <input
-                      type="checkbox"
-                      checked={!day.closed}
-                      aria-label={`${day.label}, abierto`}
-                      onChange={(e) => updateDay(day.dayOfWeek, { closed: !e.target.checked })}
-                    />
-                    <i aria-hidden="true" />
-                  </label>
-                  <span className="dname">
-                    <b>{day.label}</b>
-                    <small>{hoursOf(day)}</small>
-                  </span>
-                  {day.closed ? (
-                    <span className="muted">No se atiende este día</span>
-                  ) : (
-                    <span className="times">
-                      <input
-                        type="time"
-                        aria-label={`${day.label}, abre`}
-                        value={day.openTime}
-                        onChange={(e) => updateDay(day.dayOfWeek, { openTime: e.target.value })}
-                      />
-                      <span className="muted">a</span>
-                      <input
-                        type="time"
-                        aria-label={`${day.label}, cierra`}
-                        value={day.closeTime}
-                        onChange={(e) => updateDay(day.dayOfWeek, { closeTime: e.target.value })}
-                      />
-                    </span>
-                  )}
-                </div>
-              ))}
-            </div>
+            <WeekRanges
+              week={draft.schedule}
+              onChange={(schedule) => update({ schedule })}
+              closedLabel="No se atiende este día"
+            />
           </div>
         </section>
 
-        {/* Un solo rango por día: el horario partido sigue pendiente
-            (ENDPOINTS-PENDIENTES.md #7). */}
         <section className="panel" id="reglas">
           <div className="panel-head">
             <div>

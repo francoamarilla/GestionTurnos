@@ -27,6 +27,7 @@ import {
 } from "../components/TableKit";
 import { matchesActive, paginate, sortRows, type ActiveFilter, type Sort } from "../components/tableUtils";
 import { useToast } from "../components/Toast";
+import { toApiWeek, toDraftWeek, WeekRanges, weekProblem, type DraftDay } from "../components/WeekRanges";
 
 const PAGE_SIZE = 10;
 
@@ -88,10 +89,15 @@ function hh(time: string | null): string {
   return t.endsWith(":00") ? t.slice(0, 2) : t;
 }
 
+// "09 a 20", or "09 a 13 y 16 a 20" on a split day (#7).
+function hoursLabel(day: DaySchedule): string {
+  return day.ranges.map((r) => `${hh(r.openTime)} a ${hh(r.closeTime)}`).join(" y ");
+}
+
 // "Mar a sáb · 09 a 20", "Lun, mié · 10 a 18", "Lun a vie · horario variable".
 function scheduleSummary(schedule: DaySchedule[]): string | null {
   const open = WEEK.map((d, i) => ({ ...d, i, day: schedule.find((s) => s.dayOfWeek === d.key) })).filter(
-    (d) => d.day && !d.day.closed && d.day.openTime && d.day.closeTime,
+    (d) => d.day && d.day.ranges.length > 0,
   );
   if (open.length === 0) return null;
   const contiguous = open.every((d, k) => k === 0 || d.i === open[k - 1].i + 1);
@@ -101,11 +107,10 @@ function scheduleSummary(schedule: DaySchedule[]): string | null {
       : contiguous
         ? `${open[0].short} a ${open[open.length - 1].short}`
         : open.map((d) => d.short).join(", ");
-  const sameHours = open.every(
-    (d) => d.day!.openTime === open[0].day!.openTime && d.day!.closeTime === open[0].day!.closeTime,
-  );
+  const first = hoursLabel(open[0].day!);
+  const sameHours = open.every((d) => hoursLabel(d.day!) === first);
   const label = days[0].toUpperCase() + days.slice(1);
-  return sameHours ? `${label} · ${hh(open[0].day!.openTime)} a ${hh(open[0].day!.closeTime)}` : `${label} · horario variable`;
+  return sameHours ? `${label} · ${first}` : `${label} · horario variable`;
 }
 
 const colorOf = (rows: Row[], row: Row) => PROFESSIONAL_COLORS[rows.indexOf(row) % PROFESSIONAL_COLORS.length];
@@ -181,22 +186,12 @@ function ProfessionalDialog({
   );
 }
 
-const toApiTime = (value: string) => (value.length === 5 ? `${value}:00` : value);
-
 function ScheduleDialog({ row, onClose, onSaved }: { row: Row; onClose: () => void; onSaved: () => void }) {
-  const [schedule, setSchedule] = useState<DaySchedule[]>(() =>
-    WEEK.map(
-      (d) =>
-        row.schedule.find((s) => s.dayOfWeek === d.key) ?? { dayOfWeek: d.key, openTime: null, closeTime: null, closed: true },
-    ),
-  );
+  const [week, setWeek] = useState<DraftDay[]>(() => toDraftWeek(row.schedule));
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const update = (key: DayOfWeek, patch: Partial<DaySchedule>) =>
-    setSchedule((current) => current.map((d) => (d.dayOfWeek === key ? { ...d, ...patch } : d)));
-
-  const invalid = schedule.find((d) => !d.closed && d.openTime && d.closeTime && d.openTime.slice(0, 5) >= d.closeTime.slice(0, 5));
+  const invalid = weekProblem(week);
 
   async function save() {
     setBusy(true);
@@ -204,11 +199,7 @@ function ScheduleDialog({ row, onClose, onSaved }: { row: Row; onClose: () => vo
     try {
       await api.patch(
         `/professionals/${row.id}/schedule`,
-        schedule.map((d) => ({
-          ...d,
-          openTime: d.closed ? null : toApiTime((d.openTime || "09:00").slice(0, 5)),
-          closeTime: d.closed ? null : toApiTime((d.closeTime || "18:00").slice(0, 5)),
-        })),
+        toApiWeek(week),
       );
       onSaved();
     } catch (err) {
@@ -235,10 +226,7 @@ function ScheduleDialog({ row, onClose, onSaved }: { row: Row; onClose: () => vo
           <button
             type="button"
             className="ghost"
-            onClick={() => {
-              const monday = schedule[0];
-              setSchedule((current) => current.map((d) => ({ ...monday, dayOfWeek: d.dayOfWeek })));
-            }}
+            onClick={() => setWeek((current) => current.map((day) => ({ ...day, ranges: current[0].ranges })))}
           >
             Copiar lunes a todos
           </button>
@@ -246,53 +234,8 @@ function ScheduleDialog({ row, onClose, onSaved }: { row: Row; onClose: () => vo
       }
     >
       {error && <p className="error-text">{error}</p>}
-      {invalid && (
-        <p className="error-text">
-          {WEEK.find((d) => d.key === invalid.dayOfWeek)?.label}: la hora de salida tiene que ser posterior a la de entrada.
-        </p>
-      )}
-      <div className="week">
-        {WEEK.map(({ key, label }) => {
-          const day = schedule.find((d) => d.dayOfWeek === key)!;
-          return (
-            <div key={key} className={`week-row${day.closed ? " off" : ""}`}>
-              <label className="switch">
-                <input
-                  type="checkbox"
-                  checked={!day.closed}
-                  onChange={(e) =>
-                    update(key, {
-                      closed: !e.target.checked,
-                      openTime: day.openTime ?? "09:00",
-                      closeTime: day.closeTime ?? "18:00",
-                    })
-                  }
-                />
-                <span>{label}</span>
-              </label>
-              {day.closed ? (
-                <span className="muted">No trabaja</span>
-              ) : (
-                <span className="times">
-                  <input
-                    type="time"
-                    aria-label={`${label}, entrada`}
-                    value={(day.openTime ?? "").slice(0, 5)}
-                    onChange={(e) => update(key, { openTime: e.target.value })}
-                  />
-                  <span className="muted">a</span>
-                  <input
-                    type="time"
-                    aria-label={`${label}, salida`}
-                    value={(day.closeTime ?? "").slice(0, 5)}
-                    onChange={(e) => update(key, { closeTime: e.target.value })}
-                  />
-                </span>
-              )}
-            </div>
-          );
-        })}
-      </div>
+      {invalid && <p className="error-text">{invalid}</p>}
+      <WeekRanges week={week} onChange={setWeek} closedLabel="No trabaja" />
     </Dialog>
   );
 }

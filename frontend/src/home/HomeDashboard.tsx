@@ -5,6 +5,7 @@ import { AppointmentDetailDialog } from "../agenda/AppointmentDialogs";
 import {
   addDays,
   customerLabel,
+  dayRanges,
   dayWindow,
   loadAppointments,
   loadCatalog,
@@ -260,17 +261,20 @@ function AdminHome() {
   const clientName = (a: Appointment) =>
     a.customerId ? customerLabel(catalog.customers.find((c) => c.id === a.customerId)) : null;
 
-  // Header line.
-  const branchToday = dayWindow(catalog.branchSchedule, now.date);
+  // Header line. With a split day (#7) the siesta reads as "vuelve a
+  // abrir", not as still open until the evening.
+  const todayRanges = dayRanges(catalog.branchSchedule, now.date);
+  const openNow = todayRanges.find((r) => now.minutes >= r.open && now.minutes < r.close);
+  const nextRange = todayRanges.find((r) => now.minutes < r.open);
   const closure = catalog.closures.find((c) => c.date === now.date);
   const openLine = closure
     ? `cerrado hoy${closure.reason ? ` (${closure.reason})` : ""}`
-    : !branchToday
+    : todayRanges.length === 0
       ? "hoy no abre"
-      : now.minutes < branchToday.open
-        ? `abre a las ${toTime(branchToday.open)}`
-        : now.minutes < branchToday.close
-          ? `abierto hasta las ${toTime(branchToday.close)}`
+      : openNow
+        ? `abierto hasta las ${toTime(openNow.close)}`
+        : nextRange
+          ? `${todayRanges[0] === nextRange ? "abre" : "vuelve a abrir"} a las ${toTime(nextRange.open)}`
           : "ya cerró por hoy";
 
   // Hero.

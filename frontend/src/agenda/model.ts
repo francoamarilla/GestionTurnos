@@ -44,11 +44,15 @@ export interface Appointment {
 
 export type PaymentMethod = "CASH" | "TRANSFER" | "CARD";
 
+export interface TimeRange {
+  openTime: string; // HH:mm:ss
+  closeTime: string;
+}
+
+// A day with no ranges isn't worked; more than one range is a split day.
 export interface DaySchedule {
   dayOfWeek: DayOfWeek;
-  openTime: string | null;
-  closeTime: string | null;
-  closed: boolean;
+  ranges: TimeRange[];
 }
 
 interface Page<T> {
@@ -197,12 +201,32 @@ export function toTime(minutes: number): string {
   return `${String(Math.floor(minutes / 60)).padStart(2, "0")}:${String(minutes % 60).padStart(2, "0")}`;
 }
 
-// Open window of a schedule on a given day, or null when closed / no row
-// (same rule the backend's availability uses).
-export function dayWindow(schedule: DaySchedule[] | undefined, iso: string): { open: number; close: number } | null {
+// The day's ranges in minutes, sorted. Empty = not worked that day.
+export function dayRanges(schedule: DaySchedule[] | undefined, iso: string): { open: number; close: number }[] {
   const day = schedule?.find((s) => s.dayOfWeek === dayOfWeek(iso));
-  if (!day || day.closed || !day.openTime || !day.closeTime) return null;
-  return { open: toMinutes(day.openTime), close: toMinutes(day.closeTime) };
+  return (day?.ranges ?? [])
+    .map((r) => ({ open: toMinutes(r.openTime), close: toMinutes(r.closeTime) }))
+    .sort((a, b) => a.open - b.open);
+}
+
+// First open to last close, gaps included: what a board or a summary spans.
+// Null when the day isn't worked (same rule the backend's availability uses).
+export function dayWindow(schedule: DaySchedule[] | undefined, iso: string): { open: number; close: number } | null {
+  const ranges = dayRanges(schedule, iso);
+  if (ranges.length === 0) return null;
+  return { open: ranges[0].open, close: ranges[ranges.length - 1].close };
+}
+
+// Inside one of the day's ranges - the midday gap of a split day is not.
+export function isWorked(schedule: DaySchedule[] | undefined, iso: string, minutes: number): boolean {
+  return dayRanges(schedule, iso).some((r) => minutes >= r.open && minutes < r.close);
+}
+
+// "9:00 a 13:00 y 16:00 a 20:00"
+export function rangesLabel(schedule: DaySchedule[] | undefined, iso: string): string | null {
+  const ranges = dayRanges(schedule, iso);
+  if (ranges.length === 0) return null;
+  return ranges.map((r) => `${toTime(r.open)} a ${toTime(r.close)}`).join(" y ");
 }
 
 export function customerLabel(customer: Customer | undefined): string {

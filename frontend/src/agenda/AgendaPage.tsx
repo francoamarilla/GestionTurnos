@@ -7,6 +7,8 @@ import {
   addDays,
   customerLabel,
   dayWindow,
+  isWorked,
+  rangesLabel,
   loadAppointments,
   loadCatalog,
   longDate,
@@ -260,7 +262,6 @@ export default function AgendaPage() {
           >
             <div className="hcell gut" />
             {professionals.map((p) => {
-              const hours = dayWindow(catalog.schedules.get(p.id), date);
               const count = list?.filter((a) => a.professionalId === p.id && a.status !== "CANCELLED").length ?? 0;
               return (
                 <div key={p.id} className="hcell">
@@ -273,7 +274,7 @@ export default function AgendaPage() {
                       <b>{p.name}</b>
                       <small>
                         {count} {count === 1 ? "turno" : "turnos"} ·{" "}
-                        {hours ? `${toTime(hours.open)} a ${toTime(hours.close)}` : "no trabaja"}
+                        {rangesLabel(catalog.schedules.get(p.id), date) ?? "no trabaja"}
                       </small>
                     </div>
                   </div>
@@ -298,13 +299,16 @@ export default function AgendaPage() {
             </div>
 
             {professionals.map((p) => {
-              const hours = dayWindow(catalog.schedules.get(p.id), date);
               const bookable = !closure && branchWindow;
               return (
                 <div key={p.id} className="col">
                   {Array.from({ length: rows }, (_, i) => {
                     const minutes = window_.open + i * STEP;
-                    const closed = !hours || minutes < hours.open || minutes >= hours.close;
+                    // Closed when the branch is shut (a split day's midday
+                    // gap included, #7) or this professional isn't working.
+                    const closed =
+                      !isWorked(catalog.branchSchedule, date, minutes) ||
+                      !isWorked(catalog.schedules.get(p.id), date, minutes);
                     const past = !!now && (date < now.date || (isToday && minutes + STEP <= now.minutes));
                     return (
                       <div key={minutes} className={`slot ${minutes % 60 ? "half" : "hour"}${closed ? " closed" : ""}`}>
