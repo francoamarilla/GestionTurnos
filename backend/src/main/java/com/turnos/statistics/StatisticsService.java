@@ -234,10 +234,6 @@ public class StatisticsService {
         return time.getHour() * 60 + time.getMinute();
     }
 
-    private LocalTime earlierOf(LocalTime a, LocalTime b) {
-        return a.isBefore(b) ? a : b;
-    }
-
     private Tenant getTenant(UUID tenantId) {
         return tenantRepository
                 .findById(tenantId)

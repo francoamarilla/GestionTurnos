@@ -262,7 +262,9 @@ export default function AgendaPage() {
           >
             <div className="hcell gut" />
             {professionals.map((p) => {
-              const count = list?.filter((a) => a.professionalId === p.id && a.status !== "CANCELLED").length ?? 0;
+              const count =
+                list?.filter((a) => a.professionalId === p.id && a.status !== "CANCELLED" && a.status !== "VOIDED")
+                  .length ?? 0;
               return (
                 <div key={p.id} className="hcell">
                   <div className="pro">

@@ -26,6 +26,13 @@ export const WEEK_DAYS: { key: DayOfWeek; label: string }[] = [
 
 const DEFAULT_RANGE: DraftRange = { openTime: "09:00", closeTime: "18:00" };
 
+const END_OF_DAY = "23:59";
+
+function plusTwoHours(time: string): string {
+  const minutes = Math.min(toMinutes(time) + 120, toMinutes(END_OF_DAY));
+  return `${String(Math.floor(minutes / 60)).padStart(2, "0")}:${String(minutes % 60).padStart(2, "0")}`;
+}
+
 export function toDraftWeek(schedule: DaySchedule[]): DraftDay[] {
   return WEEK_DAYS.map(({ key, label }) => ({
     dayOfWeek: key,
@@ -144,15 +151,17 @@ export function WeekRanges({
                     )}
                   </span>
                 ))}
-                {day.ranges.length < 3 && (
+                {day.ranges.length < 3 && last.closeTime < END_OF_DAY && (
                   <button
                     type="button"
                     className="ghost sm"
                     onClick={() =>
                       patch(day.dayOfWeek, [
                         ...day.ranges,
-                        // Starts after the last one so it never overlaps.
-                        { openTime: last.closeTime, closeTime: "20:00" },
+                        // Starts when the last one ends so it never
+                        // overlaps, and lasts two hours (clamped to the end
+                        // of the day) so it is valid the moment it appears.
+                        { openTime: last.closeTime, closeTime: plusTwoHours(last.closeTime) },
                       ])
                     }
                   >

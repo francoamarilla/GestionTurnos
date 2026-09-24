@@ -2,6 +2,14 @@
 -- than one range (9-13 and 16-20), so the (owner, day) primary key goes.
 -- is_closed disappears with it: a closed day is simply a day with no
 -- ranges, which is how every reader already treats a missing row.
+-- Both tables are FORCE ROW LEVEL SECURITY and Flyway connects as their
+-- owner, so without this a migration's DML matches no row at all: the
+-- DELETEs below would report 0 rows, the SET NOT NULL further down would
+-- then choke on a closed day's NULL open_time, and any closed day that did
+-- carry times would silently come back as an open range. The flag is
+-- transaction-local (third argument true), so it dies with this migration.
+SELECT set_config('app.is_super_admin', 'true', true);
+
 DELETE FROM branch_schedule WHERE is_closed OR open_time IS NULL OR close_time IS NULL;
 DELETE FROM professional_schedule WHERE is_closed OR open_time IS NULL OR close_time IS NULL;
 

@@ -119,6 +119,44 @@ public class EstablishmentService {
         return toResponse(tenant, getBranch(tenantId));
     }
 
+    // The 7 days always travel together, and a day's ranges must be real,
+    // end after they start and not step on each other. Same rules as the
+    // professional's own week (ProfessionalService.validateWeek).
+    private static Map<DayOfWeek, List<TimeRange>> validateWeek(List<DaySchedule> schedule) {
+        Map<DayOfWeek, List<TimeRange>> byDay = new EnumMap<>(DayOfWeek.class);
+        for (DaySchedule day : schedule) {
+            List<TimeRange> ranges = day.ranges() == null ? List.<TimeRange>of() : day.ranges();
+            for (TimeRange range : ranges) {
+                // Before sorting: the comparator would NPE on a null
+                // openTime and turn a 400 into a 500.
+                if (range.openTime() == null || range.closeTime() == null) {
+                    throw new ResponseStatusException(
+                            HttpStatus.BAD_REQUEST, "openTime/closeTime required in every range: " + day.dayOfWeek());
+                }
+                if (!range.openTime().isBefore(range.closeTime())) {
+                    throw new ResponseStatusException(
+                            HttpStatus.BAD_REQUEST, "A range must end after it starts: " + day.dayOfWeek());
+                }
+            }
+            List<TimeRange> sorted =
+                    ranges.stream().sorted(Comparator.comparing(TimeRange::openTime)).toList();
+            for (int i = 1; i < sorted.size(); i++) {
+                if (sorted.get(i).openTime().isBefore(sorted.get(i - 1).closeTime())) {
+                    throw new ResponseStatusException(
+                            HttpStatus.BAD_REQUEST, "Overlapping ranges in " + day.dayOfWeek());
+                }
+            }
+            if (byDay.put(day.dayOfWeek(), sorted) != null) {
+                throw new ResponseStatusException(
+                        HttpStatus.BAD_REQUEST, "Duplicate day in schedule: " + day.dayOfWeek());
+            }
+        }
+        if (byDay.size() != DayOfWeek.values().length) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Schedule must include all 7 days of the week");
+        }
+        return byDay;
+    }
+
     // Onboarding/creation is intentionally not implemented (spec section 11:
     // "contrato de alta pendiente del BSP") - not RLS-backed (see V8
     // migration), so the tenantId filter here is the only isolation layer.
@@ -130,48 +168,23 @@ public class EstablishmentService {
     }
 
     private void replaceSchedule(UUID branchId, List<DaySchedule> schedule) {
-        Map<DayOfWeek, DaySchedule> byDay = new EnumMap<>(DayOfWeek.class);
-        for (DaySchedule day : schedule) {
-            if (byDay.put(day.dayOfWeek(), day) != null) {
-                throw new ResponseStatusException(
-                        HttpStatus.BAD_REQUEST, "Duplicate day in schedule: " + day.dayOfWeek());
-            }
-            List<TimeRange> sorted = (day.ranges() == null ? List.<TimeRange>of() : day.ranges())
-                    .stream()
-                    .sorted(Comparator.comparing(TimeRange::openTime))
-                    .toList();
-            for (int i = 0; i < sorted.size(); i++) {
-                TimeRange range = sorted.get(i);
-                if (range.openTime() == null || range.closeTime() == null) {
-                    throw new ResponseStatusException(
-                            HttpStatus.BAD_REQUEST, "openTime/closeTime required in every range: " + day.dayOfWeek());
-                }
-                if (!range.openTime().isBefore(range.closeTime())) {
-                    throw new ResponseStatusException(
-                            HttpStatus.BAD_REQUEST, "A range must end after it starts: " + day.dayOfWeek());
-                }
-                if (i > 0 && range.openTime().isBefore(sorted.get(i - 1).closeTime())) {
-                    throw new ResponseStatusException(
-                            HttpStatus.BAD_REQUEST, "Overlapping ranges in " + day.dayOfWeek());
-                }
-            }
-        }
-        if (byDay.size() != DayOfWeek.values().length) {
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Schedule must include all 7 days of the week");
-        }
+        // Validating returns the week normalized (missing list = closed day,
+        // ranges sorted), so the write below can't disagree with what was
+        // checked.
+        Map<DayOfWeek, List<TimeRange>> byDay = validateWeek(schedule);
 
         branchScheduleRepository.deleteByBranchId(branchId);
         branchScheduleRepository.flush();
-        for (DaySchedule day : schedule) {
-            for (TimeRange range : day.ranges()) {
+        byDay.forEach((dayOfWeek, ranges) -> {
+            for (TimeRange range : ranges) {
                 BranchSchedule entity = new BranchSchedule();
                 entity.setBranchId(branchId);
-                entity.setDayOfWeek(day.dayOfWeek());
+                entity.setDayOfWeek(dayOfWeek);
                 entity.setOpenTime(range.openTime());
                 entity.setCloseTime(range.closeTime());
                 branchScheduleRepository.save(entity);
             }
-        }
+        });
     }
 
     private EstablishmentResponse toResponse(Tenant tenant, Branch branch) {

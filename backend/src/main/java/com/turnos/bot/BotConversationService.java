@@ -17,6 +17,7 @@ import com.turnos.services.Service;
 import com.turnos.services.ServiceRepository;
 import com.turnos.tenancy.Tenant;
 import com.turnos.tenancy.TenantRepository;
+import com.turnos.tenancy.TenantStatus;
 import com.turnos.tenancy.TenantSessionContext;
 import com.turnos.whatsapp.WhatsAppIntegration;
 import com.turnos.whatsapp.WhatsAppIntegrationRepository;
@@ -233,9 +234,12 @@ public class BotConversationService {
     }
 
     private void startBooking(UUID tenantId, String businessNumber, String phone, BotConversationState state) {
-        // "Permitir reservas online" off (#6): the customer can still look
-        // up or cancel what they already have, they just can't book here.
-        if (!tenantRepository.findById(tenantId).orElseThrow().isOnlineBookingEnabled()) {
+        // "Permitir reservas online" off (#6), or the business closed on the
+        // platform (#9 - the Super Admin can suspend a tenant without
+        // touching that flag): the customer can still look up or cancel what
+        // they already have, they just can't book here.
+        Tenant bookingTenant = tenantRepository.findById(tenantId).orElseThrow();
+        if (!bookingTenant.isOnlineBookingEnabled() || bookingTenant.getStatus() == TenantStatus.SUSPENDED) {
             botConversationStateRepository.save(state);
             whatsAppProvider.sendText(
                     businessNumber,

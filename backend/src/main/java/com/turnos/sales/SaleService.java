@@ -78,7 +78,7 @@ public class SaleService {
         // Same rule as a new appointment: a closed business (#9) records
         // nothing new, though old sales stay editable/voidable.
         if (tenant.getStatus() == TenantStatus.SUSPENDED) {
-            throw new ResponseStatusException(HttpStatus.CONFLICT, "Business is closed");
+            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Business is closed");
         }
         ZoneId zone = ZoneId.of(tenant.getTimezone());
 

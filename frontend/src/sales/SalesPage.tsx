@@ -384,6 +384,22 @@ function EditSaleDialog({
   const [busy, setBusy] = useState(false);
   const amount = Number(price);
 
+  // The catalog only holds the first 200 customers, and PATCH /sales/{id}
+  // replaces the customer with whatever it's sent: without this, editing
+  // the price of a sale whose customer is outside that page would silently
+  // detach it.
+  useEffect(() => {
+    if (!sale.customerId || current) return;
+    let cancelled = false;
+    api
+      .get<Customer>(`/customers/${sale.customerId}`)
+      .then((found) => !cancelled && setCustomer({ kind: "existing", customer: found }))
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+    };
+  }, [sale.customerId, current]);
+
   async function submit() {
     setBusy(true);
     setError(null);

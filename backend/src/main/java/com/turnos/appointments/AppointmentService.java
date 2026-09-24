@@ -295,7 +295,9 @@ public class AppointmentService {
     // appointment row is born.
     private void requireOpen(UUID tenantId) {
         if (getTenant(tenantId).getStatus() == TenantStatus.SUSPENDED) {
-            throw new ResponseStatusException(HttpStatus.CONFLICT, "Business is closed");
+            // Not a CONFLICT: the bot reads that as "someone took the slot"
+            // and keeps re-offering times that can never be booked.
+            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Business is closed");
         }
     }
 

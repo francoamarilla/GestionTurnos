@@ -187,12 +187,4 @@ public class AvailabilityService {
     private static int minutesOf(LocalTime time) {
         return time.getHour() * 60 + time.getMinute();
     }
-
-    private LocalTime laterOf(LocalTime a, LocalTime b) {
-        return a.isAfter(b) ? a : b;
-    }
-
-    private LocalTime earlierOf(LocalTime a, LocalTime b) {
-        return a.isBefore(b) ? a : b;
-    }
 }

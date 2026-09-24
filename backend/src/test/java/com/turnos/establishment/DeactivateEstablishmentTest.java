@@ -65,7 +65,8 @@ class DeactivateEstablishmentTest extends AbstractIntegrationTest {
         assertFalse(closed.onlineBookingEnabled());
 
         ResponseStatusException rejected = assertThrows(ResponseStatusException.class, this::sell);
-        assertEquals(409, rejected.getStatusCode().value());
+        // Not 409: the bot treats that as "the slot was taken" (#9 review).
+        assertEquals(403, rejected.getStatusCode().value());
 
         // Still readable: the history is the whole point of not deleting.
         assertEquals("Deactivate Test", establishmentService.get(tenantId).businessName());
