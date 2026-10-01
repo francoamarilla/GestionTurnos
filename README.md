@@ -47,11 +47,11 @@ Backend y frontend corren cada uno por su cuenta; solo Postgres se levanta con D
 
 ```bash
 docker compose up -d postgres
-cd backend && JWT_SECRET=$(openssl rand -base64 32) ./mvnw spring-boot:run
+cd backend && SPRING_DATASOURCE_PASSWORD=turnos_app JWT_SECRET=$(openssl rand -base64 32) ./mvnw spring-boot:run
 cd frontend && npm install && npm run dev
 ```
 
-En PowerShell, la variable va aparte: `$env:JWT_SECRET = "..."` antes del `./mvnw`. Es la única variable obligatoria (ver tabla abajo); Compose la fija sola, pero corriendo el backend a mano hay que pasarla.
+En PowerShell las variables van aparte: `$env:JWT_SECRET = "..."` y `$env:SPRING_DATASOURCE_PASSWORD = "turnos_app"` antes del `./mvnw`. Son las dos únicas obligatorias (ver tabla abajo); Compose las fija solas, pero corriendo el backend a mano hay que pasarlas.
 
 El frontend en modo dev (`npm run dev`, puerto 5173) tiene un proxy propio (`vite.config.ts`) que reenvía `/api` a `http://localhost:8080`, así que no hace falta configurar CORS para desarrollar así.
 
@@ -64,12 +64,13 @@ No hay autoregistro público (spec sección 2). El alta de un tenant es manual, 
 
 ## Variables de entorno
 
-`JWT_SECRET` es obligatoria: sin ella el backend no arranca. Compose fija un valor de dev, así que `docker compose up` funciona tal cual; correr el backend por fuera de Compose la pide. El resto tiene un default razonable para desarrollo local.
+`JWT_SECRET` y `SPRING_DATASOURCE_PASSWORD` son obligatorias: sin ellas el backend no arranca. Compose fija valores de dev para las dos, así que `docker compose up` funciona tal cual; correr el backend por fuera de Compose las pide. El resto tiene un default razonable para desarrollo local.
 
 | Variable | Default | Uso |
 |---|---|---|
 | `SPRING_DATASOURCE_URL` | `jdbc:postgresql://localhost:5432/turnos` (Compose la fija a `postgres:5432`) | Conexión a Postgres |
-| `SPRING_DATASOURCE_USERNAME` / `SPRING_DATASOURCE_PASSWORD` | `turnos_app` / `turnos_app` | Credenciales del rol de aplicación (no el superusuario — RLS depende de esto) |
+| `SPRING_DATASOURCE_USERNAME` | `turnos_app` | Rol de aplicación — nunca el superusuario, RLS depende de eso |
+| `SPRING_DATASOURCE_PASSWORD` | **sin default** (Compose fija el de dev) | Contraseña de ese rol. En dev la fija `postgres-init/init-app-role.sql`; en producción la ponés vos |
 | `JWT_SECRET` | **sin default** (Compose fija uno de dev) | Clave HMAC para firmar los JWT de sesión, en base64 de al menos 32 bytes: `openssl rand -base64 32`. El valor de Compose es público y sirve solo para desarrollo. |
 | `JWT_EXPIRATION_SECONDS` | `86400` (24h) | Vencimiento del JWT — no hay refresh token (spec sección 11) |
 | `SUPERADMIN_EMAIL` / `SUPERADMIN_PASSWORD` | vacío (no siembra nada) | Si ambas están seteadas y no existe ya una cuenta con ese email, se crea un Super Admin al arrancar |

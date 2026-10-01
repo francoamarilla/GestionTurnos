@@ -22,6 +22,8 @@ services:
     environment:
       SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/turnos
       SPRING_DATASOURCE_USERNAME: turnos_app
+      # Must match the password postgres-init/init-app-role.sql gives the
+      # role; both are dev-only, like POSTGRES_PASSWORD above.
       SPRING_DATASOURCE_PASSWORD: turnos_app
       # Dev-only, and public like the rest of this file - a real deployment
       # exports its own JWT_SECRET (openssl rand -base64 32).
