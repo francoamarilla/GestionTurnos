@@ -47,11 +47,13 @@ Backend y frontend corren cada uno por su cuenta; solo Postgres se levanta con D
 
 ```bash
 docker compose up -d postgres
-cd backend && ./mvnw spring-boot:run
+cd backend && JWT_SECRET=$(openssl rand -base64 32) ./mvnw spring-boot:run
 cd frontend && npm install && npm run dev
 ```
 
-El frontend en modo dev (`npm run dev`, puerto 5173) tiene un proxy propio (`vite.config.ts`) que reenvía `/api` a `http://localhost:8080`, así que no hace falta configurar CORS ni variables extra para desarrollar así.
+En PowerShell, la variable va aparte: `$env:JWT_SECRET = "..."` antes del `./mvnw`. Es la única variable obligatoria (ver tabla abajo); Compose la fija sola, pero corriendo el backend a mano hay que pasarla.
+
+El frontend en modo dev (`npm run dev`, puerto 5173) tiene un proxy propio (`vite.config.ts`) que reenvía `/api` a `http://localhost:8080`, así que no hace falta configurar CORS para desarrollar así.
 
 ### Alta del primer tenant
 
@@ -78,6 +80,5 @@ Estas quedan explícitamente sin resolver en el MVP (spec sección 13) — no fu
 
 - **Proveedor de WhatsApp Business API (BSP)**: sin elegir (candidatos evaluados como referencia: 360dialog, Twilio, Gupshup). El código ya abstrae la integración detrás de `WhatsAppProvider` para no acoplarse a ninguno; falta implementar el adapter real una vez decidido.
 - **Ventana de cancelación**: el default de 2 horas es configurable por tenant (`Tenant.cancellationWindowHours`), pero el valor "correcto" para el negocio no está confirmado.
-- **Rango horario partido** (mañana/tarde) en el horario de sucursal/profesional: el MVP solo soporta un rango continuo por día. Implementarlo requiere confirmar el diseño exacto primero.
 
 Fuera de alcance para esta iteración (post-MVP, ver spec secciones 14–15): rol Manager, login propio del profesional, integración oficial de feriados AR, unificación automática de clientes, reprogramación masiva, seña/depósito online, waitlist, campañas de marketing, UI pulida de Super Admin, refresh token, multi-sucursal con UI de gestión, expansión a otros rubros.
