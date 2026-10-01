@@ -18,5 +18,8 @@ public abstract class AbstractIntegrationTest {
         registry.add("spring.datasource.url", TestcontainersConfiguration.POSTGRES::getJdbcUrl);
         registry.add("spring.datasource.username", () -> "turnos_app");
         registry.add("spring.datasource.password", () -> "turnos_app_pw");
+        // app.jwt.secret has no default (see application.properties), so the
+        // context needs one here. Signs nothing outside these tests.
+        registry.add("app.jwt.secret", () -> "dGVzdC1vbmx5LWtleS1ub3QtdXNlZC1hbnl3aGVyZS1lbHNl");
     }
 }

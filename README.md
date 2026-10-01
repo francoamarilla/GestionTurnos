@@ -62,13 +62,13 @@ No hay autoregistro público (spec sección 2). El alta de un tenant es manual, 
 
 ## Variables de entorno
 
-Todas tienen un default razonable para desarrollo local — ninguna es obligatoria para levantar el proyecto tal cual, salvo que se quiera un comportamiento distinto al default.
+`JWT_SECRET` es obligatoria: sin ella el backend no arranca. Compose fija un valor de dev, así que `docker compose up` funciona tal cual; correr el backend por fuera de Compose la pide. El resto tiene un default razonable para desarrollo local.
 
 | Variable | Default | Uso |
 |---|---|---|
 | `SPRING_DATASOURCE_URL` | `jdbc:postgresql://localhost:5432/turnos` (Compose la fija a `postgres:5432`) | Conexión a Postgres |
 | `SPRING_DATASOURCE_USERNAME` / `SPRING_DATASOURCE_PASSWORD` | `turnos_app` / `turnos_app` | Credenciales del rol de aplicación (no el superusuario — RLS depende de esto) |
-| `JWT_SECRET` | secreto de dev hardcodeado | Clave HMAC para firmar los JWT de sesión. **Cambiar en cualquier entorno real.** |
+| `JWT_SECRET` | **sin default** (Compose fija uno de dev) | Clave HMAC para firmar los JWT de sesión, en base64 de al menos 32 bytes: `openssl rand -base64 32`. El valor de Compose es público y sirve solo para desarrollo. |
 | `JWT_EXPIRATION_SECONDS` | `86400` (24h) | Vencimiento del JWT — no hay refresh token (spec sección 11) |
 | `SUPERADMIN_EMAIL` / `SUPERADMIN_PASSWORD` | vacío (no siembra nada) | Si ambas están seteadas y no existe ya una cuenta con ese email, se crea un Super Admin al arrancar |
 

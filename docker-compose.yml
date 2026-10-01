@@ -23,6 +23,9 @@ services:
       SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/turnos
       SPRING_DATASOURCE_USERNAME: turnos_app
       SPRING_DATASOURCE_PASSWORD: turnos_app
+      # Dev-only, and public like the rest of this file - a real deployment
+      # exports its own JWT_SECRET (openssl rand -base64 32).
+      JWT_SECRET: ${JWT_SECRET:-5DSFVm4iJP/jHfZPM3//dzEMcBT10UUBTVAuDPc/L64=}
       SUPERADMIN_EMAIL: ${SUPERADMIN_EMAIL:-}
       SUPERADMIN_PASSWORD: ${SUPERADMIN_PASSWORD:-}
     ports:
