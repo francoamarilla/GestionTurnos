@@ -29,7 +29,7 @@
   --color-neutral-text: var(--slate);
   --color-neutral-bg: var(--slate-soft);
 
-  --font-sans: "Archivo", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --font-sans: "Inter", system-ui, -apple-system, "Segoe UI", sans-serif;
   --text-page-title-size: 22px;
   --text-section-title-size: 17px;
   --text-card-size: 14px;
