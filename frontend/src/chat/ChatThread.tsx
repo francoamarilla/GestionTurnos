@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, type FormEvent } from "react";
+import { useEffect, useRef, useState, type FormEvent, type ReactNode } from "react";
 
 // One chat UI for the public customer chat and the owner's playground.
 // The backend decides who answered (AI, button bot, person); this just
@@ -35,6 +35,17 @@ interface Props {
   greeting?: string | null;
   placeholder?: string;
   disabled?: boolean;
+}
+
+// The assistant's messages carry the brand's bot avatar (decorative: the
+// conversation already says who is talking).
+function BotBubble({ children, typing = false }: { children: ReactNode; typing?: boolean }) {
+  return (
+    <div className="chat-bot">
+      <img className="chat-avatar" src="/brand/avatar-bot.png" alt="" />
+      <p className={`chat-bubble assistant${typing ? " typing" : ""}`}>{children}</p>
+    </div>
+  );
 }
 
 export function ChatThread({ send, cancel, greeting, placeholder = "Escribí un mensaje", disabled }: Props) {
@@ -90,13 +101,17 @@ export function ChatThread({ send, cancel, greeting, placeholder = "Escribí un 
   return (
     <div className="chat-box">
       <div className="chat-thread" aria-live="polite">
-        {greeting && <p className="chat-bubble assistant">{greeting}</p>}
+        {greeting && <BotBubble>{greeting}</BotBubble>}
         {lines.length === 0 && !greeting && (
           <p className="chat-empty">Escribí tu consulta: precios, horarios, turnos…</p>
         )}
         {lines.map((line, i) => (
           <div key={i} className={`chat-line ${line.from}`}>
-            <p className={`chat-bubble ${line.from}`}>{line.text}</p>
+            {line.from === "assistant" ? (
+              <BotBubble>{line.text}</BotBubble>
+            ) : (
+              <p className="chat-bubble user">{line.text}</p>
+            )}
             {i === lastIndex && line.options && line.options.length > 0 && (
               <div className="chat-options">
                 {line.options.map((o) => (
@@ -119,7 +134,7 @@ export function ChatThread({ send, cancel, greeting, placeholder = "Escribí un 
               ))}
           </div>
         ))}
-        {waiting && <p className="chat-bubble assistant typing">escribiendo…</p>}
+        {waiting && <BotBubble typing>escribiendo…</BotBubble>}
         <div ref={endRef} />
       </div>
       <form className="chat-input" onSubmit={submit}>

@@ -3854,6 +3854,25 @@ tr.total td {
   border: 1px solid var(--border);
 }
 
+/* Bot avatar beside the assistant's bubble (brand asset, as is). */
+.chat-bot {
+  display: flex;
+  align-items: flex-end;
+  gap: 8px;
+  max-width: 85%;
+}
+
+.chat-bot .chat-bubble {
+  max-width: none;
+}
+
+.chat-avatar {
+  width: 30px;
+  height: 30px;
+  border-radius: 50%;
+  flex: none;
+}
+
 .chat-bubble.typing {
   color: var(--muted);
   font-style: italic;
