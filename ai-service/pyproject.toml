@@ -36,3 +36,6 @@ ignore_missing_imports = true
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
+# evals/ is a top-level package, not installed: plain `pytest` (as CI runs it)
+# needs the project root on sys.path, which `python -m pytest` adds by itself.
+pythonpath = ["."]
