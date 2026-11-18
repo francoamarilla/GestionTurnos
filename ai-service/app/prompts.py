@@ -15,7 +15,7 @@ from zoneinfo import ZoneInfo
 from app.contracts import AgentConfig, PendingInfo
 
 # Bump on every change to platform_rules.md or to build(); travels in every response.
-PROMPT_VERSION = "2026-11-18.2"
+PROMPT_VERSION = "2026-11-18.3"
 
 PLATFORM_RULES = (Path(__file__).parent / "platform_rules.md").read_text(encoding="utf-8")
 
@@ -53,7 +53,10 @@ def owner_block(config: AgentConfig) -> str:
         EMOJIS[config.emoji_level],
     ]
     if config.greeting:
-        lines.append(f"Para saludar al principio de la conversación, usá algo como: «{config.greeting}»")
+        lines.append(
+            f"Cuando respondas al primer mensaje del cliente, saludá con algo como: «{config.greeting}». "
+            "Si menciona un momento del día (buenos días, buenas tardes), adaptalo a la hora actual."
+        )
     if not config.can_book:
         lines.append("No podés reservar turnos: si lo piden, sugerí comunicarse con el local.")
     if not config.can_cancel:

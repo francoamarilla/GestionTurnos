@@ -147,11 +147,11 @@ python -m evals.run --model claude-haiku-5-5 --model claude-sonnet-5-5 --out rep
 
 Los escenarios (`ai-service/evals/scenarios/*.yaml`) corren contra `fake_core.py`, la API interna en memoria, sin levantar Spring: reservas precisas y ambiguas, confirmaciones, grounding, fuera de tema, prompt injection, configuración del dueño y derivación. Primero chequeos determinísticos; un LLM juez solo para el tono. En CI corre el set `smoke` cuando cambia el agente y existe el secret `ANTHROPIC_API_KEY`.
 
-**Resultados** (18/11/2026, prompt `2026-11-18.2`, `python -m evals.run`):
+**Resultados** (18/11/2026, prompt `2026-11-18.3`, `python -m evals.run`):
 
 | Modelo | Escenarios OK | Costo promedio / escenario | Latencia promedio |
 |---|---|---|---|
-| claude-haiku-5-5 | 27/27 (100%) | US$ 0,00053 | 4,0 s |
+| claude-haiku-5-5 | 29/29 (100%) | US$ 0,00054 | 3,9 s |
 
 La prueba de punta a punta con el modelo real encontró un bug que los evals no cubrían: ante un "sí" de más después de una reserva automática, el agente volvía a preparar el mismo turno, recibía "horario ocupado" (lo ocupaba su propia reserva) y le decía al cliente que no había quedado. Ahora `prepare_booking` devuelve `already_booked`, y el escenario `booking_extra_yes_after_booked` lo cubre.
 

@@ -1,5 +1,25 @@
 # Questions about the business: answers must come from the tools.
 
+- id: greeting_only_morning
+  description: A bare "hola" gets a greeting for the time of day and a question, nothing unrequested
+  tags: [smoke]
+  now: "2026-11-18T11:25:00-03:00"
+  turns:
+    - "hola"
+  expect:
+    reply_matches: "buen(os)? d[ií]as|hola"
+    reply_not_matches: "\\$|buenas (tardes|noches)|minutos"
+    tools_not_called: [prepare_booking]
+
+- id: greeting_after_a_question
+  description: '"hola" later in the chat doesn''t re-explain or "correct" earlier answers'
+  now: "2026-11-18T11:25:00-03:00"
+  turns:
+    - "¿cuánto sale el corte?"
+    - "hola"
+  expect:
+    reply_not_matches: "\\$|dato que le di|le confirmo|quiero confirmar|correg"
+
 - id: info_price
   description: Price comes from list_services
   tags: [smoke]
