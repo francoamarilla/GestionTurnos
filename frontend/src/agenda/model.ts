@@ -121,7 +121,7 @@ export const STATUS_LABEL: Record<AppointmentStatus, string> = {
 };
 
 // Professional column accents, cycled in list order.
-export const PROFESSIONAL_COLORS = ["var(--brick)", "var(--pine)", "var(--amber)", "var(--slate)"];
+export const PROFESSIONAL_COLORS = ["var(--primary)", "var(--pine)", "var(--amber)", "var(--slate)"];
 
 const DAY_OF_WEEK_BY_JS_INDEX: DayOfWeek[] = [
   "SUNDAY",

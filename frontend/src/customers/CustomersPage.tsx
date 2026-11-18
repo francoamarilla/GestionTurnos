@@ -89,7 +89,7 @@ function ago(days: number): string {
   return `hace ${Math.round(days / 365)} ${Math.round(days / 365) === 1 ? "año" : "años"}`;
 }
 
-const avatarColor = (visits: number) => (visits >= LOYAL_VISITS ? "var(--brick)" : "var(--slate)");
+const avatarColor = (visits: number) => (visits >= LOYAL_VISITS ? "var(--primary)" : "var(--slate)");
 
 function whatsAppUrl(phone: string): string {
   return `https://wa.me/${phone.replace(/\D/g, "")}`;

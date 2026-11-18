@@ -223,7 +223,7 @@ export default function AgendaPage() {
 
       <div className="legend">
         <span>
-          <i style={{ background: "var(--brick)" }} />
+          <i style={{ background: "var(--primary)" }} />
           Confirmado
         </span>
         <span>

@@ -452,7 +452,7 @@ export default function StatisticsPage() {
                 label="Clientes del período"
                 parts={[
                   { label: `${s.returningCustomers} ya venían antes`, value: s.returningCustomers, color: "var(--pine)" },
-                  { label: `${s.newCustomers} nuevos`, value: s.newCustomers, color: "var(--brick)" },
+                  { label: `${s.newCustomers} nuevos`, value: s.newCustomers, color: "var(--primary)" },
                 ]}
               />
               {clients > 0 && (
