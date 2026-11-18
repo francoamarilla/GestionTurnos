@@ -2,7 +2,6 @@ import { useCallback, useEffect, useState } from "react";
 import { api, ApiError } from "../api/client";
 import { useAuth } from "../auth/AuthContext";
 import { Badge } from "../components/Badge";
-import { ChatThread, type ChatReply } from "../chat/ChatThread";
 
 // The owner's AI assistant screen (propuesta section 7 and 10): how it talks
 // and what it may do (versioned: edit a draft, try it, publish), what it
@@ -67,8 +66,8 @@ function message(e: unknown) {
 
 export default function AssistantPage() {
   const { session } = useAuth();
-  const chatLink = session?.tenantId ? `${window.location.origin}/chat/${session.tenantId}` : null;
 
+  // Testing the assistant lives in the floating chat button (layout/AssistantLauncher).
   return (
     <div className="settings-page assistant-page">
       <div className="page-head">
@@ -78,10 +77,9 @@ export default function AssistantPage() {
         </div>
       </div>
       <div className="sections">
-        <UsagePanel chatLink={chatLink} />
+        <UsagePanel />
         {session?.tenantId && <WidgetPanel tenantId={session.tenantId} />}
         <ConfigPanel />
-        <PlaygroundPanel />
         <ConversationsPanel />
       </div>
     </div>
@@ -128,7 +126,7 @@ function WidgetPanel({ tenantId }: { tenantId: string }) {
   );
 }
 
-function UsagePanel({ chatLink }: { chatLink: string | null }) {
+function UsagePanel() {
   const [usage, setUsage] = useState<Usage | null>(null);
   useEffect(() => {
     api.get<Usage>("/assistant/usage").then(setUsage, () => setUsage(null));
@@ -138,11 +136,6 @@ function UsagePanel({ chatLink }: { chatLink: string | null }) {
       <div className="panel-head">
         <div>
           <h2>Este mes</h2>
-          {chatLink && (
-            <p>
-              Link del chat para tus clientes: <a href={chatLink} target="_blank" rel="noreferrer">{chatLink}</a>
-            </p>
-          )}
         </div>
       </div>
       <div className="panel-body">
@@ -297,7 +290,7 @@ function ConfigPanel() {
         </label>
         <div className="form-actions">
           <button type="button" className="secondary" disabled={saving}
-            onClick={() => run(() => api.put<ConfigResponse>("/assistant/config/draft", form), "Borrador guardado. Probalo abajo antes de publicar.")}>
+            onClick={() => run(() => api.put<ConfigResponse>("/assistant/config/draft", form), "Borrador guardado. Probalo con el botón de chat de abajo a la derecha antes de publicar.")}>
             Guardar borrador
           </button>
           {data.draft && (
@@ -313,35 +306,6 @@ function ConfigPanel() {
             </>
           )}
         </div>
-      </div>
-    </section>
-  );
-}
-
-function PlaygroundPanel() {
-  const { session } = useAuth();
-  const [sessionId, setSessionId] = useState(() => crypto.randomUUID());
-  const send = (message: string | null): Promise<ChatReply> =>
-    api.post<ChatReply>("/assistant/playground", { sessionId, message: message ?? "" });
-  return (
-    <section className="panel">
-      <div className="panel-head">
-        <div>
-          <h2>Probar</h2>
-          <p>Chateá con el borrador (o la versión publicada). Las reservas y cancelaciones acá son simuladas.</p>
-        </div>
-        <button type="button" className="secondary sm" onClick={() => setSessionId(crypto.randomUUID())}>
-          Nueva prueba
-        </button>
-      </div>
-      <div className="panel-body">
-        <ChatThread
-          key={sessionId}
-          send={send}
-          title={session?.establishmentName ?? "Tu local"}
-          placeholder="Escribí como si fueras un cliente"
-          onRestart={() => setSessionId(crypto.randomUUID())}
-        />
       </div>
     </section>
   );

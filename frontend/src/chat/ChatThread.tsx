@@ -47,8 +47,10 @@ interface Props {
   placeholder?: string;
   // Header menu: start over with an empty thread (the old one stays saved).
   onRestart?: () => void;
-  // Shown only inside the website widget: closes the popup.
+  // Closes the popup (website widget, dashboard chat).
   onClose?: () => void;
+  // Grey notice shown while the thread is empty.
+  notice?: string;
 }
 
 const time = (d: Date) => d.toLocaleTimeString("es-AR", { hour: "2-digit", minute: "2-digit", hour12: false });
@@ -78,6 +80,7 @@ export function ChatThread({
   placeholder = "Mensaje",
   onRestart,
   onClose,
+  notice,
 }: Props) {
   const [lines, setLines] = useState<Line[]>([]);
   const [menuOpen, setMenuOpen] = useState(false);
@@ -219,7 +222,7 @@ export function ChatThread({
 
       <div className="wa-body" aria-live="polite">
         {lines.length === 0 && (
-          <p className="wa-notice">Escribile a {title} para sacar un turno o hacer una consulta.</p>
+          <p className="wa-notice">{notice ?? `Escribile a ${title} para sacar un turno o hacer una consulta.`}</p>
         )}
         {lines.map((line, i) => (
           <div key={i} className="wa-row-group">

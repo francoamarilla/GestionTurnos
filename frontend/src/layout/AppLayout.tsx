@@ -3,6 +3,7 @@ import { NavLink, Outlet } from "react-router-dom";
 import { useAuth } from "../auth/AuthContext";
 import { ToastProvider } from "../components/Toast";
 import { BrandLogo } from "../components/BrandLogo";
+import { AssistantLauncher } from "./AssistantLauncher";
 
 // Icon paths copied from the mockups' sidebar (Mockups/*.html).
 function Icon({ children }: { children: ReactNode }) {
@@ -139,6 +140,7 @@ export function AppLayout() {
           <Outlet />
         </ToastProvider>
       </main>
+      {session?.tenantId && <AssistantLauncher businessName={accountName} />}
     </div>
   );
 }
