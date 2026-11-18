@@ -1,24 +1,45 @@
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { api } from "../api/client";
 import { ChatThread, type ChatReply } from "../chat/ChatThread";
 
 // The owner's test chat, always at hand: a floating button with the brand
 // isotype (bottom right, like a site's WhatsApp button) that unfolds a chat
-// window docked in the corner, Messenger-style. It talks to the playground
-// endpoint: the draft config if there is one, bookings simulated.
+// window docked in the corner, Messenger-style. While the window is open the
+// button hides (the chat has its own close button) and comes back on close.
+// It talks to the playground endpoint: draft config, bookings simulated.
 //
 // The window stays mounted while closed, so closing and reopening keeps the
 // conversation; "Nueva conversación" (⋮ menu) starts over.
 export function AssistantLauncher({ businessName }: { businessName: string }) {
   const [open, setOpen] = useState(false);
   const [sessionId, setSessionId] = useState(() => crypto.randomUUID());
+  const dockRef = useRef<HTMLDivElement>(null);
+  const buttonRef = useRef<HTMLButtonElement>(null);
+  const opened = useRef(false);
+
+  // The button disappears when the chat opens, so focus has to move: into
+  // the message field on open, back to the button on close.
+  useEffect(() => {
+    if (open) {
+      opened.current = true;
+      dockRef.current?.querySelector<HTMLInputElement>(".wa-input input")?.focus();
+    } else if (opened.current) {
+      buttonRef.current?.focus();
+    }
+  }, [open]);
 
   const send = (message: string | null): Promise<ChatReply> =>
     api.post<ChatReply>("/assistant/playground", { sessionId, message: message ?? "" });
 
   return (
     <>
-      <div className={open ? "assist-dock open" : "assist-dock"} id="assistant-chat" role="dialog" aria-label="Probar el asistente">
+      <div
+        ref={dockRef}
+        className={open ? "assist-dock open" : "assist-dock"}
+        id="assistant-chat"
+        role="dialog"
+        aria-label="Probar el asistente"
+      >
         <ChatThread
           key={sessionId}
           send={send}
@@ -30,21 +51,17 @@ export function AssistantLauncher({ businessName }: { businessName: string }) {
         />
       </div>
       <button
+        ref={buttonRef}
         type="button"
         className="assist-launcher"
-        aria-label={open ? "Cerrar el chat del asistente" : "Abrir el chat del asistente"}
-        title={open ? "Cerrar chat" : "Probar el asistente"}
+        aria-label="Abrir el chat del asistente"
+        title="Probar el asistente"
         aria-controls="assistant-chat"
         aria-expanded={open}
-        onClick={() => setOpen((o) => !o)}
+        onClick={() => setOpen(true)}
       >
-        <span className="assist-icon">
-          <img className="theme-light" src="/brand/isotipo.svg" alt="" />
-          <img className="theme-dark" src="/brand/isotipo-oscuro.svg" alt="" />
-        </span>
-        <svg className="assist-x" viewBox="0 0 24 24" aria-hidden="true">
-          <path d="M6 6l12 12M18 6 6 18" />
-        </svg>
+        <img className="theme-light" src="/brand/isotipo.svg" alt="" />
+        <img className="theme-dark" src="/brand/isotipo-oscuro.svg" alt="" />
       </button>
     </>
   );
