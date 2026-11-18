@@ -8,6 +8,11 @@ interface LoginFormValues {
   password: string;
 }
 
+// Only the public demo build defines these, so every other build - local,
+// Compose, production - renders nothing. Unset is off.
+const DEMO_EMAIL = import.meta.env.VITE_DEMO_EMAIL;
+const DEMO_PASSWORD = import.meta.env.VITE_DEMO_PASSWORD;
+
 export default function LoginPage() {
   const { login } = useAuth();
   const navigate = useNavigate();
@@ -37,6 +42,13 @@ export default function LoginPage() {
     <div className="centered-page">
       <form className="card" onSubmit={handleSubmit(onSubmit)} noValidate>
         <h1>Iniciar sesión</h1>
+
+        {DEMO_EMAIL && DEMO_PASSWORD && (
+          <p className="demo-hint">
+            Demo pública, con datos de ejemplo. Entrá con <b>{DEMO_EMAIL}</b> y la contraseña{" "}
+            <b>{DEMO_PASSWORD}</b>.
+          </p>
+        )}
 
         <label className="field">
           <span>Email</span>
