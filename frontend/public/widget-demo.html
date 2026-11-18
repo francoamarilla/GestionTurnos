@@ -1,0 +1,71 @@
+<!doctype html>
+<html lang="es">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Ejemplo de web con el chat de Recepta</title>
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg?v=2" />
+    <!--
+      A stand-in for a barbershop's own website, to see the chat widget in
+      place: /widget-demo.html?tenant=<TENANT_ID>. The real install is the
+      single <script> tag shown on the page (and in the Asistente screen).
+    -->
+    <style>
+      :root { color-scheme: light; --ink: #1f2a26; --muted: #5c625f; --bg: #faf8f4; --accent: #2f5d50; }
+      * { box-sizing: border-box; }
+      body { margin: 0; font: 16px/1.55 system-ui, -apple-system, "Segoe UI", sans-serif; color: var(--ink); background: var(--bg); }
+      header { padding: 18px 24px; border-bottom: 1px solid #e4e0d8; display: flex; justify-content: space-between; align-items: center; }
+      header b { font-size: 18px; letter-spacing: -0.01em; }
+      header nav { display: flex; gap: 18px; color: var(--muted); font-size: 15px; }
+      main { max-width: 860px; margin: 0 auto; padding: 56px 24px 120px; }
+      h1 { font-size: clamp(30px, 5vw, 44px); line-height: 1.1; margin: 0 0 14px; letter-spacing: -0.02em; }
+      .lead { color: var(--muted); font-size: 18px; max-width: 560px; margin: 0 0 36px; }
+      .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 14px; margin-bottom: 44px; }
+      .card { background: #fff; border: 1px solid #e4e0d8; border-radius: 12px; padding: 18px; }
+      .card b { display: block; margin-bottom: 4px; }
+      .card span { color: var(--muted); font-size: 14.5px; }
+      .install { background: #fff; border: 1px dashed #c9c3b8; border-radius: 12px; padding: 18px; }
+      .install p { margin: 0 0 10px; color: var(--muted); font-size: 14.5px; }
+      code { display: block; overflow-x: auto; padding: 12px; border-radius: 8px; background: #1f2a26; color: #f2efe8; font-size: 13px; white-space: pre; }
+      .warn { background: none; padding: 0; color: #a33a28; font-size: 15px; }
+      @media (max-width: 560px) { header nav { display: none; } }
+    </style>
+  </head>
+  <body>
+    <header>
+      <b>Barbería de ejemplo</b>
+      <nav><span>Servicios</span><span>Equipo</span><span>Contacto</span></nav>
+    </header>
+    <main>
+      <h1>Cortes clásicos y modernos, sin esperas.</h1>
+      <p class="lead">Esta es una web de ejemplo. Tocá el botón de abajo a la derecha para chatear con el asistente y sacar un turno.</p>
+      <div class="grid">
+        <div class="card"><b>Corte</b><span>Clásico o moderno, con lavado.</span></div>
+        <div class="card"><b>Barba</b><span>Perfilado y toalla caliente.</span></div>
+        <div class="card"><b>Turnos online</b><span>Reservá por chat, a cualquier hora.</span></div>
+      </div>
+      <div class="install">
+        <p>Para sumarlo a tu web, pegá esta línea antes de <code style="display:inline;padding:1px 5px">&lt;/body&gt;</code>:</p>
+        <code id="snippet"></code>
+      </div>
+    </main>
+    <script>
+      (function () {
+        var tenant = new URLSearchParams(location.search).get("tenant");
+        var snippet = document.getElementById("snippet");
+        if (!tenant) {
+          snippet.className = "warn";
+          snippet.textContent = "Falta ?tenant=<id del local> en la URL.";
+          return;
+        }
+        var src = location.origin + "/widget.js";
+        snippet.textContent = '<script src="' + src + '" data-tenant="' + tenant + '" async><\/script>';
+        var s = document.createElement("script");
+        s.src = src;
+        s.async = true;
+        s.setAttribute("data-tenant", tenant);
+        document.body.appendChild(s);
+      })();
+    </script>
+  </body>
+</html>
