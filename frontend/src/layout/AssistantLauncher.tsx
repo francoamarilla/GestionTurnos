@@ -38,8 +38,13 @@ export function AssistantLauncher({ businessName }: { businessName: string }) {
         aria-expanded={open}
         onClick={() => setOpen((o) => !o)}
       >
-        <img className="theme-light" src="/brand/isotipo.svg" alt="" />
-        <img className="theme-dark" src="/brand/isotipo-oscuro.svg" alt="" />
+        <span className="assist-icon">
+          <img className="theme-light" src="/brand/isotipo.svg" alt="" />
+          <img className="theme-dark" src="/brand/isotipo-oscuro.svg" alt="" />
+        </span>
+        <svg className="assist-x" viewBox="0 0 24 24" aria-hidden="true">
+          <path d="M6 6l12 12M18 6 6 18" />
+        </svg>
       </button>
     </>
   );

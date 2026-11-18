@@ -3725,19 +3725,6 @@ tr.total td {
   }
 }
 
-/* Copyable code (Asistente > Chat en tu web). */
-.snippet {
-  margin: 0 0 12px;
-  padding: 12px 14px;
-  overflow-x: auto;
-  border: 1px solid var(--border);
-  border-radius: var(--radius-control);
-  background: var(--surface-2);
-  color: var(--ink);
-  font: 12.5px/1.5 ui-monospace, "Cascadia Code", Consolas, monospace;
-  white-space: pre;
-}
-
 /* Same page shell as Configuración, without the section subnav column. */
 .settings-page.assistant-page {
   grid-template-columns: 1fr;
@@ -3751,28 +3738,65 @@ tr.total td {
   right: 24px;
   bottom: 24px;
   z-index: 40;
+  display: grid;
+  place-items: center;
   width: 58px;
   height: 58px;
   padding: 0;
   border: 1px solid var(--border);
   border-radius: 50%;
   background: var(--recepta-surface);
+  color: var(--ink);
   box-shadow: var(--shadow-lift);
-  transition: transform 0.15s;
+  transition: transform 0.2s cubic-bezier(0.34, 1.56, 0.64, 1);
 }
 
 .assist-launcher:hover:not(:disabled) {
   filter: none;
   background: var(--recepta-surface);
-  transform: scale(1.06);
+  transform: scale(1.07);
 }
 
-.assist-launcher img {
+.assist-launcher:active:not(:disabled) {
+  transform: scale(0.94);
+}
+
+/* Isotype and close icon share the cell and swap with a quarter turn. */
+.assist-icon,
+.assist-x {
+  grid-area: 1 / 1;
+  transition: opacity 0.2s, transform 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+.assist-icon img {
   width: 38px;
   height: 38px;
   display: block;
 }
 
+.assist-x {
+  width: 24px;
+  height: 24px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2.2;
+  stroke-linecap: round;
+  opacity: 0;
+  transform: rotate(-90deg) scale(0.5);
+}
+
+.assist-launcher[aria-expanded="true"] .assist-icon {
+  opacity: 0;
+  transform: rotate(90deg) scale(0.5);
+}
+
+.assist-launcher[aria-expanded="true"] .assist-x {
+  opacity: 1;
+  transform: none;
+}
+
+/* The window grows out of the button with a slight bounce, and shrinks
+   back into it (faster, no bounce) when closed. */
 .assist-dock {
   position: fixed;
   right: 24px;
@@ -3787,16 +3811,41 @@ tr.total td {
   border: 1px solid var(--border);
   opacity: 0;
   visibility: hidden;
-  transform: translateY(16px) scale(0.96);
-  transform-origin: bottom right;
-  transition: opacity 0.18s, transform 0.18s, visibility 0s 0.18s;
+  transform: translateY(24px) scale(0.3);
+  transform-origin: calc(100% - 29px) calc(100% + 43px);
+  transition:
+    opacity 0.16s ease-in,
+    transform 0.2s cubic-bezier(0.4, 0, 1, 1),
+    visibility 0s 0.2s;
 }
 
 .assist-dock.open {
   opacity: 1;
   visibility: visible;
   transform: none;
-  transition: opacity 0.18s, transform 0.18s;
+  transition:
+    opacity 0.18s ease-out,
+    transform 0.38s cubic-bezier(0.34, 1.4, 0.64, 1);
+}
+
+/* Then the contents settle in. */
+.assist-dock.open .wa-chat > * {
+  animation: assist-settle 0.32s 0.08s ease-out backwards;
+}
+
+.assist-dock.open .wa-chat > .wa-body {
+  animation-delay: 0.14s;
+}
+
+.assist-dock.open .wa-chat > .wa-input {
+  animation-delay: 0.2s;
+}
+
+@keyframes assist-settle {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
 }
 
 /* Configuración's save bar spans the bottom edge: sit above it. */
@@ -3826,8 +3875,15 @@ tr.total td {
 
 @media (prefers-reduced-motion: reduce) {
   .assist-dock,
-  .assist-launcher {
+  .assist-dock.open,
+  .assist-launcher,
+  .assist-icon,
+  .assist-x {
     transition: none;
+  }
+
+  .assist-dock.open .wa-chat > * {
+    animation: none;
   }
 }
 

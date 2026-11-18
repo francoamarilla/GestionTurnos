@@ -1,6 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
 import { api, ApiError } from "../api/client";
-import { useAuth } from "../auth/AuthContext";
 import { Badge } from "../components/Badge";
 
 // The owner's AI assistant screen (propuesta section 7 and 10): how it talks
@@ -65,8 +64,6 @@ function message(e: unknown) {
 }
 
 export default function AssistantPage() {
-  const { session } = useAuth();
-
   // Testing the assistant lives in the floating chat button (layout/AssistantLauncher).
   return (
     <div className="settings-page assistant-page">
@@ -78,51 +75,10 @@ export default function AssistantPage() {
       </div>
       <div className="sections">
         <UsagePanel />
-        {session?.tenantId && <WidgetPanel tenantId={session.tenantId} />}
         <ConfigPanel />
         <ConversationsPanel />
       </div>
     </div>
-  );
-}
-
-// The website widget (public/widget.js): one line the owner pastes in their
-// own site, which adds a floating button that opens this chat in a popup.
-function WidgetPanel({ tenantId }: { tenantId: string }) {
-  const origin = window.location.origin;
-  const snippet = `<script src="${origin}/widget.js" data-tenant="${tenantId}" async></script>`;
-  const [copied, setCopied] = useState(false);
-
-  async function copy() {
-    try {
-      await navigator.clipboard.writeText(snippet);
-      setCopied(true);
-      window.setTimeout(() => setCopied(false), 2000);
-    } catch {
-      setCopied(false);
-    }
-  }
-
-  return (
-    <section className="panel">
-      <div className="panel-head">
-        <div>
-          <h2>Chat en tu web</h2>
-          <p>Pegá esta línea en tu página, antes de &lt;/body&gt;: aparece un botón abajo a la derecha que abre el chat.</p>
-        </div>
-      </div>
-      <div className="panel-body">
-        <pre className="snippet">{snippet}</pre>
-        <div className="form-actions">
-          <button type="button" className="secondary" onClick={() => void copy()}>
-            {copied ? "Copiado" : "Copiar código"}
-          </button>
-          <a href={`/widget-demo.html?tenant=${tenantId}`} target="_blank" rel="noreferrer">
-            Ver cómo queda en una web de ejemplo
-          </a>
-        </div>
-      </div>
-    </section>
   );
 }
 
