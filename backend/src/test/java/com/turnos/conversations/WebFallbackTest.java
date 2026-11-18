@@ -46,6 +46,18 @@ class WebFallbackTest extends AbstractIntegrationTest {
         chat(tenant, session, "\"selectionId\":\"HUMAN\"").andExpect(jsonPath("$.mode").value("HUMAN"));
         chat(tenant, session, "\"message\":\"¿hola?\"")
                 .andExpect(jsonPath("$.reply").value(ConversationService.HUMAN_NOTICE));
+
+        // The screen can show the whole thread, in order; other sessions see nothing.
+        mockMvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders
+                        .get("/api/public/" + tenant + "/chat/history").param("sessionId", session.toString()))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.length()").value(8))
+                .andExpect(jsonPath("$[0].role").value("USER"))
+                .andExpect(jsonPath("$[0].content").value("hola, quiero un turno"))
+                .andExpect(jsonPath("$[7].content").value(ConversationService.HUMAN_NOTICE));
+        mockMvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders
+                        .get("/api/public/" + tenant + "/chat/history").param("sessionId", UUID.randomUUID().toString()))
+                .andExpect(jsonPath("$.length()").value(0));
     }
 
     @Test

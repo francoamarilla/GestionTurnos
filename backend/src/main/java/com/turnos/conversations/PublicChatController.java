@@ -42,6 +42,15 @@ public class PublicChatController {
         return publicChatService.info(tenantId, turnstileVerifier.enabled());
     }
 
+    @GetMapping("/api/public/{tenantId}/chat/history")
+    public java.util.List<PublicChatService.HistoryMessage> history(
+            @PathVariable UUID tenantId,
+            @org.springframework.web.bind.annotation.RequestParam UUID sessionId,
+            HttpServletRequest http) {
+        rateLimiter.check("ip:" + http.getRemoteAddr());
+        return publicChatService.history(tenantId, sessionId.toString());
+    }
+
     @PostMapping("/api/public/{tenantId}/chat")
     public ConversationService.ChatReply chat(
             @PathVariable UUID tenantId, @Valid @RequestBody ChatRequest request, HttpServletRequest http) {

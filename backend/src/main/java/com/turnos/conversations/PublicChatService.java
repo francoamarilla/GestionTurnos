@@ -21,13 +21,16 @@ public class PublicChatService {
     private final AssistantConfigService configService;
     private final ConversationRepository conversationRepository;
     private final AppointmentService appointmentService;
+    private final ChatMessageRepository chatMessageRepository;
 
     public PublicChatService(
             TenantRepository tenantRepository,
             TenantSessionContext tenantSessionContext,
             AssistantConfigService configService,
             ConversationRepository conversationRepository,
-            AppointmentService appointmentService) {
+            AppointmentService appointmentService,
+            ChatMessageRepository chatMessageRepository) {
+        this.chatMessageRepository = chatMessageRepository;
         this.tenantRepository = tenantRepository;
         this.tenantSessionContext = tenantSessionContext;
         this.configService = configService;
@@ -42,6 +45,22 @@ public class PublicChatService {
         Tenant tenant = tenant(tenantId);
         AssistantConfig config = configService.published(tenantId);
         return new ChatInfo(tenant.getBusinessName(), config.getAssistantName(), config.getGreeting(), captchaRequired);
+    }
+
+    public record HistoryMessage(String role, String content, java.time.Instant createdAt) {
+    }
+
+    // The thread as the AI sees it, so the screen never shows a "fresh" chat
+    // while the model is answering an older conversation. The session id is
+    // a random UUID only that browser knows.
+    public java.util.List<HistoryMessage> history(UUID tenantId, String sessionId) {
+        tenant(tenantId);
+        return conversationRepository
+                .findByTenantIdAndChannelAndExternalId(tenantId, ConversationService.CHANNEL_WEB, sessionId)
+                .map(c -> chatMessageRepository.findByConversationIdOrderByIdAsc(c.getId()).stream()
+                        .map(m -> new HistoryMessage(m.getRole(), m.getContent(), m.getCreatedAt()))
+                        .toList())
+                .orElse(java.util.List.of());
     }
 
     // Only the customer this chat identified can cancel, and only their own
