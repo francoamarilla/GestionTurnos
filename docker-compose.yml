@@ -30,11 +30,25 @@ services:
       JWT_SECRET: ${JWT_SECRET:-5DSFVm4iJP/jHfZPM3//dzEMcBT10UUBTVAuDPc/L64=}
       SUPERADMIN_EMAIL: ${SUPERADMIN_EMAIL:-}
       SUPERADMIN_PASSWORD: ${SUPERADMIN_PASSWORD:-}
+      AI_SERVICE_URL: http://ai:8000
+      AI_SERVICE_TOKEN: ${AI_SERVICE_TOKEN:-dev-only-ai-service-token}
     ports:
       - "8080:8080"
     depends_on:
       postgres:
         condition: service_healthy
+
+  # No published port: only the backend talks to it. Without
+  # ANTHROPIC_API_KEY in your shell every turn fails and the chat answers
+  # with Spring's fixed fallback message.
+  ai:
+    build:
+      context: ./ai-service
+    environment:
+      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
+      AI_MODEL: ${AI_MODEL:-claude-haiku-5-5}
+      AI_SERVICE_TOKEN: ${AI_SERVICE_TOKEN:-dev-only-ai-service-token}
+      CORE_BASE_URL: http://backend:8080
 
   frontend:
     build:

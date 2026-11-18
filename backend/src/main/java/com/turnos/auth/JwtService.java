@@ -24,12 +24,17 @@ public class JwtService {
     }
 
     public String generateToken(String subject, Map<String, Object> claims) {
+        return generateToken(subject, claims, expirationSeconds);
+    }
+
+    // Short-lived tokens, e.g. the per-turn AGENT token the AI service uses.
+    public String generateToken(String subject, Map<String, Object> claims, long ttlSeconds) {
         Instant now = Instant.now();
         return Jwts.builder()
                 .subject(subject)
                 .claims(claims)
                 .issuedAt(Date.from(now))
-                .expiration(Date.from(now.plusSeconds(expirationSeconds)))
+                .expiration(Date.from(now.plusSeconds(ttlSeconds)))
                 .signWith(signingKey)
                 .compact();
     }

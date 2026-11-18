@@ -55,6 +55,11 @@ const ADMIN_NAV_GROUPS: { label: string; items: NavItem[] }[] = [
     items: [
       { to: "/statistics", label: "Estadísticas", icon: <Icon><path d="M4 20V10M10 20V4M16 20v-7M22 20H2" /></Icon> },
       {
+        to: "/assistant",
+        label: "Asistente",
+        icon: <Icon><path d="M4 5h16v11H9l-5 4z" /><path d="M8 10h8M8 13h5" /></Icon>,
+      },
+      {
         to: "/settings",
         label: "Configuración",
         icon: (

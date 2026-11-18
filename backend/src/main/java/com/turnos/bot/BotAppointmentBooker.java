@@ -1,5 +1,6 @@
 package com.turnos.bot;
 
+import com.turnos.appointments.AppointmentOrigin;
 import com.turnos.appointments.AppointmentResponse;
 import com.turnos.appointments.AppointmentService;
 import com.turnos.appointments.CreateAppointmentRequest;
@@ -46,7 +47,7 @@ class BotAppointmentBooker {
     @Transactional(propagation = Propagation.REQUIRES_NEW)
     AppointmentResponse attemptCreate(UUID tenantId, CreateAppointmentRequest request) {
         tenantSessionContext.apply(false, tenantId);
-        return appointmentService.create(tenantId, request);
+        return appointmentService.create(tenantId, request, AppointmentOrigin.BOT);
     }
 
     // Same isolation need as attemptCreate: rescheduleAsCustomer ends in the

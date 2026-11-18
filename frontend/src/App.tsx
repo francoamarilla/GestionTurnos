@@ -11,6 +11,8 @@ import AgendaPage from "./agenda/AgendaPage";
 import SalesPage from "./sales/SalesPage";
 import StatisticsPage from "./statistics/StatisticsPage";
 import SettingsPage from "./settings/SettingsPage";
+import ChatPage from "./chat/ChatPage";
+import AssistantPage from "./assistant/AssistantPage";
 
 export default function App() {
   return (
@@ -18,6 +20,7 @@ export default function App() {
       <AuthProvider>
         <Routes>
           <Route path="/login" element={<LoginPage />} />
+          <Route path="/chat/:tenantId" element={<ChatPage />} />
           <Route
             element={
               <RequireAuth>
@@ -33,6 +36,7 @@ export default function App() {
             <Route path="/sales" element={<SalesPage />} />
             <Route path="/statistics" element={<StatisticsPage />} />
             <Route path="/settings" element={<SettingsPage />} />
+            <Route path="/assistant" element={<AssistantPage />} />
           </Route>
         </Routes>
       </AuthProvider>

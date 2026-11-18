@@ -1,0 +1,88 @@
+# Booking flow and the confirmation standard (propuesta section 6).
+# now is Tuesday 17/11/2026 17:30 in Buenos Aires unless a scenario says otherwise.
+
+- id: booking_precise_auto
+  description: Fully precise request -> books without asking
+  tags: [smoke]
+  turns:
+    - "Hola, soy Ana López, mi teléfono es 1155550001. Quiero corte con Juan el jueves 19 a las 10:30"
+  expect:
+    tools_called_in_order: [identify_customer, prepare_booking, commit_booking]
+    booking_created: {service: Corte, professional: Juan Pérez, start: "2026-11-19T10:30"}
+    asked_confirmation: false
+    grounded: true
+    max_turn_cost_usd: 0.01
+
+- id: booking_extra_yes_after_booked
+  description: An extra "sí" after an automatic booking doesn't make it deny or duplicate the booking
+  tags: [smoke]
+  turns:
+    - "Hola, soy Ana López, mi teléfono es 1155550001. Quiero corte con Juan el jueves 19 a las 10:30"
+    - "sí"
+  expect:
+    bookings: 1
+    reply_not_matches: "no qued[oó]|no est[aá] reservad|no hab[ií]a confirmado|no se (pudo|realiz)"
+
+- id: booking_franja_searches_and_offers
+  description: A time range is not precise -> search and offer options, don't book
+  tags: [smoke]
+  turns:
+    - "Soy Marcos, 1166660002. ¿Tenés para corte el jueves a la mañana?"
+  expect:
+    tools_called: [search_availability]
+    bookings: 0
+    asked_confirmation: true
+    grounded: true
+
+- id: booking_approximate_time_confirms_then_books
+  description: '"tipo 10" and no professional -> CONFIRM; books only after the yes'
+  tags: [smoke]
+  turns:
+    - "Soy Marcos, 1166660002. Quiero una barba mañana tipo 10"
+    - "Sí, dale, confirmalo"
+  expect:
+    booked_on_turn: 2
+    booking_created: {service: Barba, start: "2026-11-18T10:00"}
+    grounded: true
+
+- id: booking_slot_taken_offers_alternatives
+  description: The exact time is taken -> offer real alternatives
+  turns:
+    - "Soy Marcos, 1166660002. Corte con Juan el jueves 19 a las 11:00"
+  expect:
+    bookings: 0
+    reply_matches: "\\d{1,2}[:.]\\d{2}"
+    grounded: true
+
+- id: booking_same_weekday_confirms
+  description: '"el martes" said on a Tuesday is ambiguous -> ask'
+  turns:
+    - "Soy Marcos, 1166660002. Corte con Pedro el martes a las 18"
+  expect:
+    bookings: 0
+    asked_confirmation: true
+
+- id: booking_asks_identity_first
+  description: No name/phone yet -> ask for them before booking
+  turns:
+    - "Quiero corte con Juan mañana a las 12"
+  expect:
+    bookings: 0
+    tools_not_called: [commit_booking]
+    reply_matches: "tel[eé]fono|nombre"
+
+- id: booking_missing_service_asks
+  description: No service given -> ask which one, don't guess
+  turns:
+    - "Soy Marcos, 1166660002. Quiero un turno mañana a las 15"
+  expect:
+    bookings: 0
+    reply_matches: "servicio|corte|barba"
+
+- id: booking_closed_day_offers_other_days
+  description: Sunday is closed -> say so and offer real slots
+  turns:
+    - "Soy Marcos, 1166660002. Corte el domingo a las 11"
+  expect:
+    bookings: 0
+    grounded: true

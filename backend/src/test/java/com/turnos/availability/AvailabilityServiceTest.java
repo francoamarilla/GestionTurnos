@@ -140,6 +140,15 @@ class AvailabilityServiceTest {
     }
 
     @Test
+    void bookableAvailabilityDropsPastSlots() {
+        LocalDate nextMonday = LocalDate.now(zone).with(java.time.temporal.TemporalAdjusters.next(DayOfWeek.MONDAY));
+
+        assertTrue(availabilityService.getBookableAvailability(tenantId, professionalId, serviceId, monday).isEmpty());
+        assertEquals(
+                18, availabilityService.getBookableAvailability(tenantId, professionalId, serviceId, nextMonday).size());
+    }
+
+    @Test
     void generatesBackToBackSlotsWithinOpenHours() {
         List<OffsetDateTime> slots = availabilityService.getAvailability(tenantId, professionalId, serviceId, monday);
 

@@ -11,6 +11,16 @@ frontend/dist/
 frontend/build/
 frontend/.vite/
 
+# Python (ai-service)
+ai-service/.venv/
+__pycache__/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+*.egg-info/
+ai-service/build/
+eval-report*.json
+
 # Env
 .env
 .env.local

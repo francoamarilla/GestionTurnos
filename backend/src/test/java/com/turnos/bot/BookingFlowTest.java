@@ -75,7 +75,7 @@ class BookingFlowTest extends AbstractIntegrationTest {
 
         botConversationService.handleMessage(new InboundMessage(businessNumber, phone, "CONFIRM_BOOKING", null));
         assertEquals(BotStep.ROOT_MENU, currentStep(fixture.tenantId(), phone));
-        assertEquals(1, countConfirmedAppointments(fixture.professionalId()));
+        assertEquals(1, countConfirmedBotAppointments(fixture.professionalId()));
     }
 
     @Test
@@ -252,11 +252,12 @@ class BookingFlowTest extends AbstractIntegrationTest {
         }
     }
 
-    private int countConfirmedAppointments(UUID professionalId) throws Exception {
+    private int countConfirmedBotAppointments(UUID professionalId) throws Exception {
         try (Connection connection = dataSource.getConnection()) {
             setSuperAdmin(connection);
             try (PreparedStatement ps = connection.prepareStatement(
-                    "SELECT count(*) FROM appointment WHERE professional_id = ? AND status = 'CONFIRMED'")) {
+                    "SELECT count(*) FROM appointment WHERE professional_id = ? AND status = 'CONFIRMED'"
+                            + " AND origin = 'BOT'")) {
                 ps.setObject(1, professionalId);
                 try (ResultSet rs = ps.executeQuery()) {
                     rs.next();

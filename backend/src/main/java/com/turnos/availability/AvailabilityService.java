@@ -167,6 +167,16 @@ public class AvailabilityService {
         return slots;
     }
 
+    // What a customer may book (bot, AI agent): the same slots minus the ones
+    // already in the past. The panel keeps getAvailability() unfiltered.
+    public List<OffsetDateTime> getBookableAvailability(
+            UUID tenantId, UUID professionalId, UUID serviceId, LocalDate date) {
+        Instant now = Instant.now();
+        return getAvailability(tenantId, professionalId, serviceId, date).stream()
+                .filter(slot -> slot.toInstant().isAfter(now))
+                .toList();
+    }
+
     // Every overlap of an open range with a worked range, in minutes from
     // midnight. Public-ish so StatisticsService can count the same hours.
     public static List<int[]> workingWindows(List<int[]> branchRanges, List<int[]> professionalRanges) {

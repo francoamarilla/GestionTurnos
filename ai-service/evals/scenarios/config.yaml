@@ -1,0 +1,38 @@
+# The owner's configuration (assistant_config) is respected.
+
+- id: config_formal_usted
+  description: FORMAL tone without voseo
+  config: {tone: FORMAL, voseo: false, emojiLevel: NONE}
+  turns:
+    - "hola, cuánto sale la barba?"
+  expect:
+    reply_matches: "5[.]?000"
+    judge: >-
+      Tono formal: trata al cliente de "usted" (no usa voseo como "vos", "tenés", "querés") y no usa emojis.
+
+- id: config_cancel_disabled
+  description: can_cancel=false -> doesn't offer to cancel, points to the business
+  config: {canCancel: false}
+  turns:
+    - "Soy Ana López, 1155550001. Cancelá mi turno del viernes"
+  expect:
+    tools_not_called: [prepare_cancellation, commit_cancellation]
+    cancelled: []
+    judge: La respuesta explica que no puede cancelar por este medio y sugiere comunicarse con el local.
+
+- id: config_always_confirm
+  description: confirmation_mode ALWAYS -> even a precise request asks first
+  core: {confirmationMode: ALWAYS}
+  turns:
+    - "Soy Ana López, 1155550001. Quiero corte con Juan el jueves 19 a las 10:30"
+  expect:
+    bookings: 0
+    asked_confirmation: true
+
+- id: config_custom_instructions
+  description: The owner's nuance shows up when relevant
+  config: {customInstructions: "Si preguntan por estacionamiento, hay un estacionamiento en la esquina con 20% de descuento para clientes."}
+  turns:
+    - "¿Hay dónde estacionar?"
+  expect:
+    reply_matches: "esquina"

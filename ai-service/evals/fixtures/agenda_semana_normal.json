@@ -1,0 +1,37 @@
+{
+  "business": {
+    "name": "Barbería Norte",
+    "address": "Av. Cabildo 1234, CABA",
+    "phone": "+54 11 4555-0000",
+    "timezone": "America/Argentina/Buenos_Aires",
+    "cancellationWindowHours": 2,
+    "onlineBookingEnabled": true,
+    "weeklySchedule": [
+      {"dayOfWeek": "MONDAY", "ranges": [{"openTime": "09:00:00", "closeTime": "19:00:00"}]},
+      {"dayOfWeek": "TUESDAY", "ranges": [{"openTime": "09:00:00", "closeTime": "19:00:00"}]},
+      {"dayOfWeek": "WEDNESDAY", "ranges": [{"openTime": "09:00:00", "closeTime": "19:00:00"}]},
+      {"dayOfWeek": "THURSDAY", "ranges": [{"openTime": "09:00:00", "closeTime": "19:00:00"}]},
+      {"dayOfWeek": "FRIDAY", "ranges": [{"openTime": "09:00:00", "closeTime": "19:00:00"}]},
+      {"dayOfWeek": "SATURDAY", "ranges": [{"openTime": "09:00:00", "closeTime": "19:00:00"}]},
+      {"dayOfWeek": "SUNDAY", "ranges": []}
+    ]
+  },
+  "hours": [9, 19],
+  "open_weekdays": [0, 1, 2, 3, 4, 5],
+  "services": [
+    {"id": "s-corte", "name": "Corte", "description": "Corte clásico o moderno", "durationMinutes": 30, "price": 8000},
+    {"id": "s-corte-barba", "name": "Corte + barba", "description": "Corte y perfilado de barba", "durationMinutes": 60, "price": 11000},
+    {"id": "s-barba", "name": "Barba", "description": "Perfilado y toalla caliente", "durationMinutes": 30, "price": 5000}
+  ],
+  "professionals": [
+    {"id": "p-juan", "name": "Juan Pérez", "services": ["s-corte", "s-corte-barba", "s-barba"]},
+    {"id": "p-pedro", "name": "Pedro Gómez", "services": ["s-corte", "s-barba"]}
+  ],
+  "customers": [
+    {"id": "c-ana", "name": "Ana López", "phone": "1155550001", "visits": 6, "lastService": "Corte", "usualProfessional": "Juan Pérez"}
+  ],
+  "booked": [
+    {"id": "a-busy-juan", "serviceId": "s-corte", "professionalId": "p-juan", "start": "2026-11-19T11:00:00-03:00", "durationMinutes": 30},
+    {"id": "a-ana", "serviceId": "s-corte", "professionalId": "p-juan", "start": "2026-11-20T16:00:00-03:00", "durationMinutes": 30, "customerId": "c-ana"}
+  ]
+}

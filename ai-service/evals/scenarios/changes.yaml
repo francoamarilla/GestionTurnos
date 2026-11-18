@@ -1,0 +1,27 @@
+# Cancelling and rescheduling: cancellations always ask first (decision A2).
+
+- id: cancel_asks_first
+  description: A cancellation is never done without the customer's yes
+  tags: [smoke]
+  turns:
+    - "Soy Ana López, 1155550001. Quiero cancelar mi turno del viernes"
+  expect:
+    tools_called: [prepare_cancellation]
+    cancelled: []
+    asked_confirmation: true
+
+- id: cancel_after_yes
+  description: '...and is done after it'
+  turns:
+    - "Soy Ana López, 1155550001. Quiero cancelar mi turno del viernes"
+    - "Sí, cancelalo"
+  expect:
+    cancelled: [a-ana]
+
+- id: reschedule_precise
+  description: Precise new time with the same professional -> moved
+  turns:
+    - "Soy Ana López, 1155550001. Pasame el turno del viernes al sábado 21 a las 12"
+    - "Sí"
+  expect:
+    rescheduled_to: "2026-11-21T12:00"

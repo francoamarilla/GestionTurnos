@@ -55,8 +55,13 @@ public class AppointmentService {
     // turned into the specific 409 the spec requires, not a generic error.
     @Transactional
     public AppointmentResponse create(UUID tenantId, CreateAppointmentRequest request) {
+        return create(tenantId, request, AppointmentOrigin.DASHBOARD);
+    }
+
+    @Transactional
+    public AppointmentResponse create(UUID tenantId, CreateAppointmentRequest request, AppointmentOrigin origin) {
         ZoneId zone = ZoneId.of(getTenant(tenantId).getTimezone());
-        Appointment appointment = createInternal(tenantId, request);
+        Appointment appointment = createInternal(tenantId, request, origin);
         return AppointmentResponse.from(appointment, zone);
     }
 
@@ -65,7 +70,7 @@ public class AppointmentService {
     // which would silently skip Spring's transactional proxy anyway - both
     // public entry points are already @Transactional, so this just
     // participates in whichever transaction is already active.
-    private Appointment createInternal(UUID tenantId, CreateAppointmentRequest request) {
+    private Appointment createInternal(UUID tenantId, CreateAppointmentRequest request, AppointmentOrigin origin) {
         // A closed business (#9) takes no new work, from the panel or the
         // bot. Rescheduling goes through here too, on purpose.
         requireOpen(tenantId);
@@ -112,7 +117,7 @@ public class AppointmentService {
         appointment.setDurationMinutes(durationMinutes);
         appointment.setPrice(service.getPrice());
         appointment.setStatus(AppointmentStatus.CONFIRMED);
-        appointment.setOrigin(AppointmentOrigin.DASHBOARD);
+        appointment.setOrigin(origin);
 
         try {
             return appointmentRepository.saveAndFlush(appointment);
@@ -142,6 +147,9 @@ public class AppointmentService {
     // in-process by the bot (section 8) - the caller is responsible for
     // having already identified which Customer is asking (phone lookup),
     // there's no HTTP endpoint or JWT for the end customer.
+    // Deliberately not @Transactional: the bot calls it inside its own
+    // transaction and catches the window/ownership errors; an inner proxy
+    // would mark that outer transaction rollback-only on every refusal.
     public void cancelAsCustomer(UUID tenantId, UUID customerId, UUID appointmentId) {
         Tenant tenant = getTenant(tenantId);
         Appointment appointment = getOwnedOrThrow(tenantId, appointmentId);
@@ -177,7 +185,8 @@ public class AppointmentService {
         CreateAppointmentRequest createRequest =
                 new CreateAppointmentRequest(professionalId, serviceId, request.startTime(), original.getCustomerId());
 
-        Appointment replacement = createInternal(tenantId, createRequest);
+        // A reschedule keeps where the booking came from.
+        Appointment replacement = createInternal(tenantId, createRequest, original.getOrigin());
         replacement.setRescheduledFromAppointmentId(original.getId());
         return appointmentRepository.save(replacement);
     }

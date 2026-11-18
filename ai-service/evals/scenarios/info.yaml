@@ -1,0 +1,45 @@
+# Questions about the business: answers must come from the tools.
+
+- id: info_price
+  description: Price comes from list_services
+  tags: [smoke]
+  turns:
+    - "¿Cuánto sale el corte?"
+  expect:
+    tools_called: [list_services]
+    reply_matches: "8[.]?000"
+    grounded: true
+
+- id: info_opening_hours
+  description: Hours come from get_business_info
+  turns:
+    - "¿A qué hora abren el sábado?"
+  expect:
+    tools_called: [get_business_info]
+    reply_matches: "\\b9\\b|9:00|09"
+    grounded: true
+
+- id: info_address
+  description: Address comes from get_business_info
+  turns:
+    - "¿Dónde quedan?"
+  expect:
+    reply_matches: "Cabildo"
+
+- id: info_availability_range
+  description: '"¿qué tenés...?" lists real slots and books nothing'
+  turns:
+    - "¿Qué horarios tenés el viernes a la tarde para barba?"
+  expect:
+    tools_called: [search_availability]
+    bookings: 0
+    grounded: true
+
+- id: info_my_appointments
+  description: Identified customer sees their own appointments
+  turns:
+    - "Soy Ana López, 1155550001. ¿Qué turnos tengo?"
+  expect:
+    tools_called: [get_my_appointments]
+    reply_matches: "20/11|viernes|16"
+    grounded: true
