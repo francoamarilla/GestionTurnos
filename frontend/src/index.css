@@ -3709,14 +3709,33 @@ tr.total td {
   background: var(--wa-header);
 }
 
+/* Inside the website widget's popup: fill the iframe, no phone frame. */
+.chat-page.embed {
+  height: 100svh;
+  max-width: none;
+}
+
 @media (min-width: 700px) {
-  .chat-page {
+  .chat-page:not(.embed) {
     height: min(820px, calc(100svh - 48px));
     margin: 24px auto;
     border-radius: 18px;
     overflow: hidden;
     box-shadow: var(--shadow-lift);
   }
+}
+
+/* Copyable code (Asistente > Chat en tu web). */
+.snippet {
+  margin: 0 0 12px;
+  padding: 12px 14px;
+  overflow-x: auto;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-control);
+  background: var(--surface-2);
+  color: var(--ink);
+  font: 12.5px/1.5 ui-monospace, "Cascadia Code", Consolas, monospace;
+  white-space: pre;
 }
 
 /* Same page shell as Configuración, without the section subnav column. */
@@ -3776,6 +3795,74 @@ tr.total td {
   height: 38px;
   border-radius: 50%;
   flex: none;
+}
+
+.wa-head-actions {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  margin-left: auto;
+}
+
+.wa-icon {
+  width: 38px;
+  height: 38px;
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  background: transparent;
+  color: inherit;
+}
+
+.wa-icon:hover:not(:disabled) {
+  filter: none;
+  background: color-mix(in srgb, currentColor 14%, transparent);
+}
+
+.wa-icon svg {
+  width: 20px;
+  height: 20px;
+  fill: currentColor;
+  stroke: currentColor;
+  stroke-width: 0;
+}
+
+.wa-icon path {
+  fill: none;
+  stroke-width: 2.2;
+  stroke-linecap: round;
+}
+
+.wa-menu {
+  position: relative;
+}
+
+.wa-menu-list {
+  position: absolute;
+  top: calc(100% + 4px);
+  right: 0;
+  z-index: 5;
+  min-width: 190px;
+  padding: 6px 0;
+  border-radius: 8px;
+  background: var(--wa-in);
+  box-shadow: 0 6px 24px var(--wa-shadow);
+}
+
+.wa-menu-list button {
+  justify-content: flex-start;
+  width: 100%;
+  padding: 10px 18px;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  color: var(--wa-ink);
+  font-weight: 400;
+}
+
+.wa-menu-list button:hover:not(:disabled) {
+  filter: none;
+  background: var(--wa-in-hover);
 }
 
 .wa-body {

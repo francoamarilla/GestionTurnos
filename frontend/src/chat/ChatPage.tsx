@@ -22,11 +22,13 @@ declare global {
   }
 }
 
-function sessionIdFor(tenantId: string): string {
+// fresh = "Nueva conversación": a new session id, so the backend starts a new
+// conversation; the old one stays saved for the owner.
+function sessionIdFor(tenantId: string, fresh = false): string {
   const key = `chat-session:${tenantId}`;
   try {
     const existing = localStorage.getItem(key);
-    if (existing) return existing;
+    if (existing && !fresh) return existing;
     const created = crypto.randomUUID();
     localStorage.setItem(key, created);
     return created;
@@ -34,6 +36,11 @@ function sessionIdFor(tenantId: string): string {
     return crypto.randomUUID();
   }
 }
+
+// /chat/:tenantId?embed=1 runs inside the website widget (public/widget.js):
+// it fills the popup and its close button tells the host page to hide it.
+const EMBEDDED = new URLSearchParams(window.location.search).has("embed");
+const closeWidget = () => window.parent.postMessage({ type: "recepta:close" }, "*");
 
 // /chat/demo is the public demo's fixed link; its tenant id changes on every reset.
 export default function ChatPage() {
@@ -53,7 +60,7 @@ export default function ChatPage() {
 }
 
 function TenantChat({ tenantId }: { tenantId: string }) {
-  const [sessionId] = useState(() => sessionIdFor(tenantId));
+  const [sessionId, setSessionId] = useState(() => sessionIdFor(tenantId));
   const [info, setInfo] = useState<ChatInfo | null>(null);
   const [captchaToken, setCaptchaToken] = useState<string | null>(null);
   const captchaRef = useRef<HTMLDivElement>(null);
@@ -64,7 +71,7 @@ function TenantChat({ tenantId }: { tenantId: string }) {
 
   const needsCaptcha = Boolean(info?.captchaRequired && TURNSTILE_SITE_KEY);
   useEffect(() => {
-    if (!needsCaptcha || !captchaRef.current) return;
+    if (!needsCaptcha || captchaToken || !captchaRef.current) return;
     const el = captchaRef.current;
     const render = () => {
       window.turnstile?.render(el, { sitekey: TURNSTILE_SITE_KEY!, callback: setCaptchaToken });
@@ -78,7 +85,8 @@ function TenantChat({ tenantId }: { tenantId: string }) {
     script.async = true;
     script.onload = render;
     document.head.appendChild(script);
-  }, [needsCaptcha]);
+    // Re-runs after "Nueva conversación": a new session needs a new token.
+  }, [needsCaptcha, captchaToken]);
 
   const send = (message: string | null, selectionId: string | null) =>
     api.post<ChatReply>(`/public/${tenantId}/chat`, { sessionId, message, selectionId, turnstileToken: captchaToken });
@@ -92,16 +100,24 @@ function TenantChat({ tenantId }: { tenantId: string }) {
     [tenantId, sessionId],
   );
 
+  const restart = () => {
+    setCaptchaToken(null);
+    setSessionId(sessionIdFor(tenantId, true));
+  };
+
   return (
-    <div className="chat-page">
+    <div className={EMBEDDED ? "chat-page embed" : "chat-page"}>
       {needsCaptcha && !captchaToken && <div ref={captchaRef} className="chat-captcha" />}
       <ChatThread
+        key={sessionId}
         send={send}
         cancel={cancel}
         loadHistory={loadHistory}
         title={info?.businessName ?? "Chat"}
         disabled={needsCaptcha && !captchaToken}
         placeholder={needsCaptcha && !captchaToken ? "Completá la verificación para escribir" : undefined}
+        onRestart={restart}
+        onClose={EMBEDDED ? closeWidget : undefined}
       />
     </div>
   );

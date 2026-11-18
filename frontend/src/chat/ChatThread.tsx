@@ -45,6 +45,10 @@ interface Props {
   title: string;
   disabled?: boolean;
   placeholder?: string;
+  // Header menu: start over with an empty thread (the old one stays saved).
+  onRestart?: () => void;
+  // Shown only inside the website widget: closes the popup.
+  onClose?: () => void;
 }
 
 const time = (d: Date) => d.toLocaleTimeString("es-AR", { hour: "2-digit", minute: "2-digit", hour12: false });
@@ -65,8 +69,18 @@ function Ticks() {
   );
 }
 
-export function ChatThread({ send, cancel, loadHistory, title, disabled, placeholder = "Mensaje" }: Props) {
+export function ChatThread({
+  send,
+  cancel,
+  loadHistory,
+  title,
+  disabled,
+  placeholder = "Mensaje",
+  onRestart,
+  onClose,
+}: Props) {
   const [lines, setLines] = useState<Line[]>([]);
+  const [menuOpen, setMenuOpen] = useState(false);
   const [draft, setDraft] = useState("");
   const [waiting, setWaiting] = useState(false);
   const [cancelled, setCancelled] = useState<Set<string>>(new Set());
@@ -90,6 +104,24 @@ export function ChatThread({ send, cancel, loadHistory, title, disabled, placeho
   useEffect(() => {
     endRef.current?.scrollIntoView({ block: "end" });
   }, [lines, waiting]);
+
+  // Close the header menu with Escape or a click anywhere else.
+  const menuRef = useRef<HTMLSpanElement>(null);
+  useEffect(() => {
+    if (!menuOpen) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setMenuOpen(false);
+    };
+    const onDown = (e: PointerEvent) => {
+      if (!menuRef.current?.contains(e.target as Node)) setMenuOpen(false);
+    };
+    document.addEventListener("keydown", onKey);
+    document.addEventListener("pointerdown", onDown);
+    return () => {
+      document.removeEventListener("keydown", onKey);
+      document.removeEventListener("pointerdown", onDown);
+    };
+  }, [menuOpen]);
 
   async function deliver(message: string | null, selection: ChatOption | null) {
     if (waiting) return;
@@ -141,6 +173,48 @@ export function ChatThread({ send, cancel, loadHistory, title, disabled, placeho
           <strong>{title}</strong>
           <small>{waiting ? "escribiendo…" : "en línea"}</small>
         </div>
+        <span className="wa-head-actions">
+          {onRestart && (
+            <span className="wa-menu" ref={menuRef}>
+              <button
+                type="button"
+                className="wa-icon"
+                aria-label="Más opciones"
+                aria-haspopup="menu"
+                aria-expanded={menuOpen}
+                onClick={() => setMenuOpen((o) => !o)}
+              >
+                <svg viewBox="0 0 24 24" aria-hidden="true">
+                  <circle cx="12" cy="5" r="1.8" />
+                  <circle cx="12" cy="12" r="1.8" />
+                  <circle cx="12" cy="19" r="1.8" />
+                </svg>
+              </button>
+              {menuOpen && (
+                <span className="wa-menu-list" role="menu">
+                  <button
+                    type="button"
+                    role="menuitem"
+                    disabled={waiting}
+                    onClick={() => {
+                      setMenuOpen(false);
+                      onRestart();
+                    }}
+                  >
+                    Nueva conversación
+                  </button>
+                </span>
+              )}
+            </span>
+          )}
+          {onClose && (
+            <button type="button" className="wa-icon" aria-label="Cerrar chat" onClick={onClose}>
+              <svg viewBox="0 0 24 24" aria-hidden="true">
+                <path d="M6 6l12 12M18 6 6 18" />
+              </svg>
+            </button>
+          )}
+        </span>
       </header>
 
       <div className="wa-body" aria-live="polite">
