@@ -278,6 +278,7 @@ function ConfigPanel() {
 }
 
 function PlaygroundPanel() {
+  const { session } = useAuth();
   const [sessionId, setSessionId] = useState(() => crypto.randomUUID());
   const send = (message: string | null): Promise<ChatReply> =>
     api.post<ChatReply>("/assistant/playground", { sessionId, message: message ?? "" });
@@ -293,7 +294,7 @@ function PlaygroundPanel() {
         </button>
       </div>
       <div className="panel-body">
-        <ChatThread key={sessionId} send={send} placeholder="Escribí como si fueras un cliente" />
+        <ChatThread key={sessionId} send={send} title={session?.establishmentName ?? "Tu local"} placeholder="Escribí como si fueras un cliente" />
       </div>
     </section>
   );

@@ -37,6 +37,27 @@
   --slate: #626A66;
   --slate-soft: #E9ECE9;
 
+  /* Customer chat, a WhatsApp look-alike on purpose: its bubble, wallpaper
+     and text colors are WhatsApp's; header, links and send stay Recepta. */
+  --wa-wallpaper: #efeae2;
+  --wa-pattern: color-mix(in srgb, var(--recepta-ink) 6%, transparent);
+  --wa-header: var(--recepta-primary);
+  --wa-header-ink: var(--recepta-surface);
+  --wa-in: #ffffff;
+  --wa-in-hover: #f5f6f6;
+  --wa-out: #d9fdd3;
+  --wa-ink: #111b21;
+  --wa-meta: #667781;
+  --wa-tick: #53bdeb;
+  --wa-link: var(--recepta-primary);
+  --wa-chip: #ffffff;
+  --wa-notice: #ffeecd;
+  --wa-shadow: rgba(11, 20, 26, .13);
+  --wa-bar: #f0f2f5;
+  --wa-field: #ffffff;
+  --wa-send: var(--recepta-primary);
+  --wa-send-ink: var(--recepta-surface);
+
   --shadow: 0 1px 2px color-mix(in srgb, var(--recepta-ink) 6%, transparent);
   --shadow-lift: 0 12px 32px color-mix(in srgb, var(--recepta-ink) 14%, transparent);
   --r: 10px;
@@ -64,6 +85,24 @@
   --amber-soft: #332A17;
   --slate: #9AA39F;
   --slate-soft: #2C3632;
+
+  --wa-wallpaper: #0b141a;
+  --wa-pattern: color-mix(in srgb, #ffffff 4%, transparent);
+  --wa-header: #202c33;
+  --wa-header-ink: #e9edef;
+  --wa-in: #202c33;
+  --wa-in-hover: #2a3942;
+  --wa-out: #005c4b;
+  --wa-ink: #e9edef;
+  --wa-meta: #8696a0;
+  --wa-link: var(--primary);
+  --wa-chip: #182229;
+  --wa-notice: #182229;
+  --wa-shadow: rgba(0, 0, 0, .4);
+  --wa-bar: #202c33;
+  --wa-field: #2a3942;
+  --wa-send: var(--primary);
+  --wa-send-ink: var(--on-primary);
 
   --shadow: 0 1px 2px rgba(0, 0, 0, .4);
   --shadow-lift: 0 12px 32px rgba(0, 0, 0, .5);

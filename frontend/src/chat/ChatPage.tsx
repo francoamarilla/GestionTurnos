@@ -1,7 +1,7 @@
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useParams } from "react-router-dom";
 import { api } from "../api/client";
-import { ChatThread, type ChatReply } from "./ChatThread";
+import { ChatThread, type ChatReply, type HistoryMessage } from "./ChatThread";
 
 // Public customer chat with the business's assistant (no login). The
 // session id ties messages into one conversation on the backend; it lives
@@ -86,17 +86,20 @@ function TenantChat({ tenantId }: { tenantId: string }) {
   const cancel = (appointmentId: string) =>
     api.post<{ reply: string }>(`/public/${tenantId}/chat/cancel`, { sessionId, appointmentId }).then((r) => r.reply);
 
+  // Stable identity: ChatThread loads the history once per session.
+  const loadHistory = useCallback(
+    () => api.get<HistoryMessage[]>(`/public/${tenantId}/chat/history?sessionId=${sessionId}`),
+    [tenantId, sessionId],
+  );
+
   return (
     <div className="chat-page">
-      <header className="chat-head">
-        <strong>{info?.businessName ?? "Chat"}</strong>
-        {info && <span className="muted">{info.assistantName}</span>}
-      </header>
       {needsCaptcha && !captchaToken && <div ref={captchaRef} className="chat-captcha" />}
       <ChatThread
         send={send}
         cancel={cancel}
-        greeting={info?.greeting}
+        loadHistory={loadHistory}
+        title={info?.businessName ?? "Chat"}
         disabled={needsCaptcha && !captchaToken}
         placeholder={needsCaptcha && !captchaToken ? "Completá la verificación para escribir" : undefined}
       />

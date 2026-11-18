@@ -1,9 +1,10 @@
-import { useEffect, useRef, useState, type FormEvent, type ReactNode } from "react";
+import { useEffect, useRef, useState, type FormEvent } from "react";
 
-// One chat UI for the public customer chat and the owner's playground.
-// The backend decides who answered (AI, button bot, person); this just
-// renders text, the bot's buttons, and the "Cancelar este turno" action
-// under an automatic booking.
+// One chat UI, styled like a WhatsApp conversation, for the public customer
+// chat and the owner's playground. The customer always writes first: there
+// is no opening message from the assistant. The backend decides who answers
+// (AI, button bot, person); this renders the thread, the bot's buttons and
+// the "Cancelar este turno" action under an automatic booking.
 export interface ChatOption {
   id: string;
   label: string;
@@ -22,9 +23,16 @@ export interface ChatReply {
   mode: "AI" | "FALLBACK" | "HUMAN";
 }
 
+export interface HistoryMessage {
+  role: "USER" | "ASSISTANT";
+  content: string;
+  createdAt: string;
+}
+
 interface Line {
   from: "user" | "assistant";
   text: string;
+  at: Date;
   options?: ChatOption[];
   actions?: ChatAction[];
 }
@@ -32,23 +40,32 @@ interface Line {
 interface Props {
   send: (message: string | null, selectionId: string | null) => Promise<ChatReply>;
   cancel?: (appointmentId: string) => Promise<string>;
-  greeting?: string | null;
-  placeholder?: string;
+  // The conversation so far, so the screen shows exactly what the assistant sees.
+  loadHistory?: () => Promise<HistoryMessage[]>;
+  title: string;
   disabled?: boolean;
+  placeholder?: string;
 }
 
-// The assistant's messages carry the brand's bot avatar (decorative: the
-// conversation already says who is talking).
-function BotBubble({ children, typing = false }: { children: ReactNode; typing?: boolean }) {
+const time = (d: Date) => d.toLocaleTimeString("es-AR", { hour: "2-digit", minute: "2-digit", hour12: false });
+
+function dayLabel(d: Date) {
+  const today = new Date();
+  const yesterday = new Date(today.getTime() - 86_400_000);
+  if (d.toDateString() === today.toDateString()) return "Hoy";
+  if (d.toDateString() === yesterday.toDateString()) return "Ayer";
+  return d.toLocaleDateString("es-AR", { day: "numeric", month: "long", year: "numeric" });
+}
+
+function Ticks() {
   return (
-    <div className="chat-bot">
-      <img className="chat-avatar" src="/brand/avatar-bot.png" alt="" />
-      <p className={`chat-bubble assistant${typing ? " typing" : ""}`}>{children}</p>
-    </div>
+    <svg className="wa-ticks" viewBox="0 0 16 11" aria-label="Leído">
+      <path d="M11.1 0.6 4.9 7.7 2.2 5.2 1 6.5l3.9 3.6 7.4-8.4z M15 0.6 8.8 7.7l-0.8-0.7-1.2 1.4 2.1 1.9 7.4-8.4z" />
+    </svg>
   );
 }
 
-export function ChatThread({ send, cancel, greeting, placeholder = "Escribí un mensaje", disabled }: Props) {
+export function ChatThread({ send, cancel, loadHistory, title, disabled, placeholder = "Mensaje" }: Props) {
   const [lines, setLines] = useState<Line[]>([]);
   const [draft, setDraft] = useState("");
   const [waiting, setWaiting] = useState(false);
@@ -56,16 +73,34 @@ export function ChatThread({ send, cancel, greeting, placeholder = "Escribí un 
   const endRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
+    if (!loadHistory) return;
+    loadHistory().then(
+      (messages) =>
+        setLines(
+          messages.map((m) => ({
+            from: m.role === "USER" ? "user" : "assistant",
+            text: m.content,
+            at: new Date(m.createdAt),
+          })),
+        ),
+      () => undefined,
+    );
+  }, [loadHistory]);
+
+  useEffect(() => {
     endRef.current?.scrollIntoView({ block: "end" });
   }, [lines, waiting]);
 
   async function deliver(message: string | null, selection: ChatOption | null) {
     if (waiting) return;
-    setLines((l) => [...l, { from: "user", text: message ?? selection?.label ?? "" }]);
+    setLines((l) => [...l, { from: "user", text: message ?? selection?.label ?? "", at: new Date() }]);
     setWaiting(true);
     try {
       const r = await send(message, selection?.id ?? null);
-      setLines((l) => [...l, { from: "assistant", text: r.reply, options: r.options, actions: r.actions }]);
+      setLines((l) => [
+        ...l,
+        { from: "assistant", text: r.reply, at: new Date(), options: r.options, actions: r.actions },
+      ]);
     } catch (e) {
       const status = (e as { status?: number }).status;
       const text =
@@ -76,7 +111,7 @@ export function ChatThread({ send, cancel, greeting, placeholder = "Escribí un 
             : status === 403
               ? "No pudimos verificar que no seas un robot. Recargá la página."
               : "No pudimos enviar tu mensaje. Probá de nuevo.";
-      setLines((l) => [...l, { from: "assistant", text }]);
+      setLines((l) => [...l, { from: "assistant", text, at: new Date() }]);
     } finally {
       setWaiting(false);
     }
@@ -94,29 +129,40 @@ export function ChatThread({ send, cancel, greeting, placeholder = "Escribí un 
     if (!cancel) return;
     const text = await cancel(appointmentId).catch(() => "No se pudo cancelar. Probá de nuevo.");
     setCancelled((s) => new Set(s).add(appointmentId));
-    setLines((l) => [...l, { from: "assistant", text }]);
+    setLines((l) => [...l, { from: "assistant", text, at: new Date() }]);
   }
 
   const lastIndex = lines.length - 1;
   return (
-    <div className="chat-box">
-      <div className="chat-thread" aria-live="polite">
-        {greeting && <BotBubble>{greeting}</BotBubble>}
-        {lines.length === 0 && !greeting && (
-          <p className="chat-empty">Escribí tu consulta: precios, horarios, turnos…</p>
+    <div className="wa-chat">
+      <header className="wa-head">
+        <img className="wa-avatar" src="/brand/avatar-bot.png" alt="" />
+        <div>
+          <strong>{title}</strong>
+          <small>{waiting ? "escribiendo…" : "en línea"}</small>
+        </div>
+      </header>
+
+      <div className="wa-body" aria-live="polite">
+        {lines.length === 0 && (
+          <p className="wa-notice">Escribile a {title} para sacar un turno o hacer una consulta.</p>
         )}
         {lines.map((line, i) => (
-          <div key={i} className={`chat-line ${line.from}`}>
-            {line.from === "assistant" ? (
-              <BotBubble>{line.text}</BotBubble>
-            ) : (
-              <p className="chat-bubble user">{line.text}</p>
+          <div key={i} className="wa-row-group">
+            {(i === 0 || line.at.toDateString() !== lines[i - 1].at.toDateString()) && (
+              <p className="wa-day">{dayLabel(line.at)}</p>
             )}
+            <div className={`wa-msg ${line.from}`}>
+              <p>{line.text}</p>
+              <span className="wa-meta">
+                {time(line.at)}
+                {line.from === "user" && <Ticks />}
+              </span>
+            </div>
             {i === lastIndex && line.options && line.options.length > 0 && (
-              <div className="chat-options">
+              <div className="wa-buttons">
                 {line.options.map((o) => (
-                  <button key={o.id} type="button" className="secondary sm" disabled={waiting}
-                    onClick={() => void deliver(null, o)}>
+                  <button key={o.id} type="button" disabled={waiting} onClick={() => void deliver(null, o)}>
                     {o.label}
                   </button>
                 ))}
@@ -125,19 +171,22 @@ export function ChatThread({ send, cancel, greeting, placeholder = "Escribí un 
             {line.actions
               ?.filter((a) => a.type === "booking_created" && a.appointmentId && cancel)
               .map((a) => (
-                <div key={a.appointmentId} className="chat-options">
-                  <button type="button" className="secondary sm" disabled={cancelled.has(a.appointmentId!)}
-                    onClick={() => void cancelBooking(a.appointmentId!)}>
+                <div key={a.appointmentId} className="wa-buttons">
+                  <button
+                    type="button"
+                    disabled={cancelled.has(a.appointmentId!)}
+                    onClick={() => void cancelBooking(a.appointmentId!)}
+                  >
                     {cancelled.has(a.appointmentId!) ? "Turno cancelado" : "Cancelar este turno"}
                   </button>
                 </div>
               ))}
           </div>
         ))}
-        {waiting && <BotBubble typing>escribiendo…</BotBubble>}
         <div ref={endRef} />
       </div>
-      <form className="chat-input" onSubmit={submit}>
+
+      <form className="wa-input" onSubmit={submit}>
         <input
           aria-label="Mensaje"
           value={draft}
@@ -146,8 +195,10 @@ export function ChatThread({ send, cancel, greeting, placeholder = "Escribí un 
           placeholder={placeholder}
           disabled={disabled}
         />
-        <button type="submit" disabled={disabled || waiting || !draft.trim()}>
-          Enviar
+        <button type="submit" className="wa-send" aria-label="Enviar" disabled={disabled || waiting || !draft.trim()}>
+          <svg viewBox="0 0 24 24" aria-hidden="true">
+            <path d="M3.4 20.4 21 12 3.4 3.6 3.4 10.1 15 12 3.4 13.9z" />
+          </svg>
         </button>
       </form>
     </div>
