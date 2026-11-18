@@ -1,0 +1,18 @@
+:root {
+  --recepta-primary: #2f5d50;
+  --recepta-primary-hover: #264c41;
+  --recepta-ink: #1f2a26;
+  --recepta-bg: #f7f5f0;
+  --recepta-surface: #ffffff;
+  --recepta-border: #d8d4cc;
+  --recepta-muted: #6b6b6b;
+}
+[data-theme="dark"] {
+  --recepta-primary: #4f8f7b;
+  --recepta-primary-hover: #5fa38d;
+  --recepta-ink: #f2efe8;
+  --recepta-bg: #1c2421;
+  --recepta-surface: #25302c;
+  --recepta-border: #3a4742;
+  --recepta-muted: #a3aba7;
+}

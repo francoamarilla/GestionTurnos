@@ -69,10 +69,11 @@ function loadSales(range: { from: string; to: string }, professionalId: string) 
 
 const sum = (list: Appointment[]) => list.reduce((total, a) => total + Number(a.price), 0);
 
-// Hues from Mockups/ventas-stats-mockup.html: pine / brick / amber.
-const PAYMENT: Record<PaymentMethod, { label: string; short: string; variant: "pine" | "brick" | "amber" }> = {
+// Hues from Mockups/ventas-stats-mockup.html, with the brand accent in place
+// of the old brick: pine / primary / amber.
+const PAYMENT: Record<PaymentMethod, { label: string; short: string; variant: "pine" | "primary" | "amber" }> = {
   CASH: { label: "Efectivo", short: "Efec.", variant: "pine" },
-  TRANSFER: { label: "Transferencia", short: "Transf.", variant: "brick" },
+  TRANSFER: { label: "Transferencia", short: "Transf.", variant: "primary" },
   CARD: { label: "Tarjeta", short: "Tarj.", variant: "amber" },
 };
 const PAYMENT_METHODS = Object.keys(PAYMENT) as PaymentMethod[];

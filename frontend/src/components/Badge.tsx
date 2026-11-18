@@ -1,5 +1,5 @@
-// Hues match the mockup tokens (tokens.css).
-type BadgeVariant = "brick" | "pine" | "amber" | "slate";
+// Hues match tokens.css: primary = brand accent, the rest are status colors.
+type BadgeVariant = "primary" | "brick" | "pine" | "amber" | "slate";
 
 export function Badge({ variant, children }: { variant: BadgeVariant; children: React.ReactNode }) {
   return (
@@ -13,10 +13,11 @@ export function Badge({ variant, children }: { variant: BadgeVariant; children: 
 // VOIDED = a charged appointment whose sale was annulled from Ventas.
 export type AppointmentStatus = "CONFIRMED" | "COMPLETED" | "CANCELLED" | "NO_SHOW" | "VOIDED";
 
-// Mapping from Mockups/agenda-mockup.html: brick = Confirmado,
-// pine = Completado, amber = No asistió, slate = Cancelado.
+// Mapping from Mockups/agenda-mockup.html, with the brand accent in place
+// of the old brick: primary = Confirmado, pine = Completado,
+// amber = No asistió, slate = Cancelado.
 const APPOINTMENT_STATUS: Record<AppointmentStatus, { variant: BadgeVariant; label: string }> = {
-  CONFIRMED: { variant: "brick", label: "Confirmado" },
+  CONFIRMED: { variant: "primary", label: "Confirmado" },
   COMPLETED: { variant: "pine", label: "Completado" },
   CANCELLED: { variant: "slate", label: "Cancelado" },
   NO_SHOW: { variant: "amber", label: "No asistió" },

@@ -4,6 +4,19 @@
     <meta charset="UTF-8" />
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <script>
+      // Dark mode = data-theme="dark" on <html> (the brand tokens' selector).
+      // Follows the OS unless something set data-theme explicitly; runs
+      // before the CSS paints, so there's no light flash.
+      (function () {
+        var root = document.documentElement;
+        if (root.dataset.theme) return;
+        var dark = window.matchMedia("(prefers-color-scheme: dark)");
+        var apply = function () { root.dataset.theme = dark.matches ? "dark" : "light"; };
+        apply();
+        dark.addEventListener("change", apply);
+      })();
+    </script>
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link

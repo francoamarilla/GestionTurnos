@@ -1,27 +1,44 @@
 /* ---------------------------------------------------------------------
-   Design tokens — copied verbatim from Mockups/agenda-mockup.html.
-   The mockups are the source of truth: when a mockup changes its :root,
-   update this file, not the component rules.
-   Dark mode follows the OS unless <html data-theme="light|dark"> forces it.
+   App tokens. The brand palette lives in branding/tokens.css (Recepta,
+   copied verbatim from /branding): this file only maps the names the
+   rules use onto it, plus the status colors, which aren't part of the
+   brand. Never put a brand hex here - change branding/tokens.css instead.
+
+   Dark mode is [data-theme="dark"] on <html>, the same selector the brand
+   tokens use. A small script in index.html sets it from the OS preference
+   (and follows changes), so forcing a theme later is just setting that
+   attribute.
 --------------------------------------------------------------------- */
 :root {
-  --paper: #F4EDE2;
-  --surface: #FFFFFF;
-  --surface-2: #FBF7F1;
-  --border: #E3D9CA;
-  --border-strong: #D2C4B0;
-  --ink: #241B16;
-  --muted: #7A6A5F;
-  --brick: #9C3D22;
-  --brick-soft: #F3E2DB;
-  --pine: #2F6B4F;
-  --pine-soft: #E4EEE7;
-  --amber: #8A6516;
+  --paper: var(--recepta-bg);
+  --surface: var(--recepta-surface);
+  --surface-2: color-mix(in srgb, var(--recepta-surface) 50%, var(--recepta-bg));
+  --border: var(--recepta-border);
+  --border-strong: color-mix(in srgb, var(--recepta-border) 85%, var(--recepta-ink));
+  --ink: var(--recepta-ink);
+  --muted: var(--recepta-muted);
+
+  /* Primary: buttons, links, active nav, focus, the agenda's accents. */
+  --primary: var(--recepta-primary);
+  --primary-hover: var(--recepta-primary-hover);
+  --primary-soft: color-mix(in srgb, var(--primary) 12%, var(--recepta-surface));
+  /* Text and icons on a solid --primary background. */
+  --on-primary: var(--recepta-surface);
+
+  /* Status colors (not brand): error, success, warning, neutral. Success is
+     a leaf green on purpose: the brand primary is a teal green, and the old
+     success green was nearly identical to it (Confirmado vs Completado). */
+  --brick: #A33A28;
+  --brick-soft: #F5E1DC;
+  --pine: #3B6E22;
+  --pine-soft: #E6EFDD;
+  --amber: #7F5D12;
   --amber-soft: #F5EBD5;
-  --slate: #8C8279;
-  --slate-soft: #EDE8E1;
-  --shadow: 0 1px 2px rgba(36, 27, 22, .06);
-  --shadow-lift: 0 12px 32px rgba(36, 27, 22, .14);
+  --slate: #626A66;
+  --slate-soft: #E9ECE9;
+
+  --shadow: 0 1px 2px color-mix(in srgb, var(--recepta-ink) 6%, transparent);
+  --shadow-lift: 0 12px 32px color-mix(in srgb, var(--recepta-ink) 14%, transparent);
   --r: 10px;
   /* Agenda grid geometry (used by the agenda screen). */
   --slot-h: 54px;
@@ -29,45 +46,25 @@
   color-scheme: light;
 }
 
-@media (prefers-color-scheme: dark) {
-  :root:not([data-theme="light"]) {
-    --paper: #17120F;
-    --surface: #201A16;
-    --surface-2: #191411;
-    --border: #342B24;
-    --border-strong: #463A31;
-    --ink: #F2E9E0;
-    --muted: #A6968A;
-    --brick: #D4622F;
-    --brick-soft: #3A2018;
-    --pine: #7FC0A0;
-    --pine-soft: #17291F;
-    --amber: #D4A73F;
-    --amber-soft: #2C2314;
-    --slate: #9A8F86;
-    --slate-soft: #26201C;
-    --shadow: 0 1px 2px rgba(0, 0, 0, .4);
-    --shadow-lift: 0 12px 32px rgba(0, 0, 0, .5);
-    color-scheme: dark;
-  }
-}
-
 :root[data-theme="dark"] {
-  --paper: #17120F;
-  --surface: #201A16;
-  --surface-2: #191411;
-  --border: #342B24;
-  --border-strong: #463A31;
-  --ink: #F2E9E0;
-  --muted: #A6968A;
-  --brick: #D4622F;
-  --brick-soft: #3A2018;
-  --pine: #7FC0A0;
-  --pine-soft: #17291F;
+  /* Recepta's dark primary (#4f8f7b) is 3.8:1 under white and 3.6:1 as text
+     on a card: below WCAG AA for small text. Dark mode uses the brand's
+     lighter hover green as primary, with dark text on it (5.4:1). */
+  --primary: var(--recepta-primary-hover);
+  --primary-hover: color-mix(in srgb, var(--recepta-primary-hover) 85%, var(--recepta-ink));
+  /* Tinted from the page background, not the card: green text keeps 4.6:1. */
+  --primary-soft: color-mix(in srgb, var(--primary) 10%, var(--recepta-bg));
+  --on-primary: var(--recepta-bg);
+
+  --brick: #E07A66;
+  --brick-soft: #3A2622;
+  --pine: #A4CC85;
+  --pine-soft: #26331C;
   --amber: #D4A73F;
-  --amber-soft: #2C2314;
-  --slate: #9A8F86;
-  --slate-soft: #26201C;
+  --amber-soft: #332A17;
+  --slate: #9AA39F;
+  --slate-soft: #2C3632;
+
   --shadow: 0 1px 2px rgba(0, 0, 0, .4);
   --shadow-lift: 0 12px 32px rgba(0, 0, 0, .5);
   color-scheme: dark;

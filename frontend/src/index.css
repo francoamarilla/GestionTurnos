@@ -16,8 +16,8 @@
   --color-text: var(--ink);
   --color-text-secondary: var(--muted);
   --color-border: var(--border);
-  --color-accent-primary: var(--brick);
-  --color-accent-primary-contrast: #fff;
+  --color-accent-primary: var(--primary);
+  --color-accent-primary-contrast: var(--on-primary);
   --color-accent-secondary: var(--amber);
   --color-accent-secondary-bg: var(--amber-soft);
   --color-success-text: var(--pine);
@@ -85,11 +85,11 @@ textarea {
 }
 
 a {
-  color: var(--brick);
+  color: var(--primary);
 }
 
 :focus-visible {
-  outline: 2px solid var(--brick);
+  outline: 2px solid var(--primary);
   outline-offset: 2px;
   border-radius: 4px;
 }
@@ -170,9 +170,9 @@ a {
 .field select:focus,
 .field textarea:focus,
 .search-input:focus {
-  outline: 2px solid var(--brick);
+  outline: 2px solid var(--primary);
   outline-offset: -1px;
-  border-color: var(--brick);
+  border-color: var(--primary);
 }
 
 .search-input {
@@ -196,10 +196,10 @@ button {
   justify-content: center;
   gap: 7px;
   padding: 8px 13px;
-  border: 1px solid var(--brick);
+  border: 1px solid var(--primary);
   border-radius: var(--radius-control);
-  background: var(--brick);
-  color: #fff;
+  background: var(--primary);
+  color: var(--on-primary);
   font-size: 13.5px;
   font-weight: 600;
   white-space: nowrap;
@@ -217,6 +217,15 @@ button svg {
 
 button:hover:not(:disabled) {
   filter: brightness(1.07);
+}
+
+/* The default (primary) button gets the brand's hover color instead of the
+   generic brighten every other button variant keeps. */
+button:not([class]):hover:not(:disabled),
+button.sm:not(.secondary):not(.ghost):hover:not(:disabled) {
+  filter: none;
+  background: var(--primary-hover);
+  border-color: var(--primary-hover);
 }
 
 button:disabled {
@@ -244,8 +253,8 @@ button.ghost {
 
 button.ghost:hover:not(:disabled) {
   filter: none;
-  background: var(--brick-soft);
-  color: var(--brick);
+  background: var(--primary-soft);
+  color: var(--primary);
 }
 
 button.sm {
@@ -292,6 +301,12 @@ button.icon svg {
   height: 7px;
   border-radius: 50%;
   background: currentColor;
+}
+
+/* Brand accent (confirmed, loyal...). badge-brick is for alerts only. */
+.badge-primary {
+  color: var(--primary);
+  background: var(--primary-soft);
 }
 
 .badge-brick {
@@ -349,7 +364,7 @@ button.icon svg {
   width: 26px;
   height: 26px;
   border-radius: 7px;
-  background: var(--brick);
+  background: var(--primary);
   display: grid;
   place-items: center;
   flex: none;
@@ -358,7 +373,7 @@ button.icon svg {
 .sidebar-mark svg {
   width: 15px;
   height: 15px;
-  stroke: #fff;
+  stroke: var(--on-primary);
   stroke-width: 2;
   stroke-linecap: round;
   fill: none;
@@ -400,16 +415,16 @@ button.icon svg {
 }
 
 .sidebar a:hover {
-  background: var(--brick-soft);
+  background: var(--primary-soft);
 }
 
 .sidebar a.active {
-  background: var(--brick);
-  color: #fff;
+  background: var(--primary);
+  color: var(--on-primary);
 }
 
 .sidebar a.active svg {
-  stroke: #fff;
+  stroke: var(--on-primary);
 }
 
 .sidebar-footer {
@@ -425,8 +440,8 @@ button.icon svg {
   width: 30px;
   height: 30px;
   border-radius: 50%;
-  background: var(--brick);
-  color: #fff;
+  background: var(--primary);
+  color: var(--on-primary);
   display: grid;
   place-items: center;
   font-size: 12px;
@@ -819,7 +834,7 @@ select.select {
 .combo-list button:hover:not(:disabled),
 .combo-list button.hl {
   filter: none;
-  background: var(--brick-soft);
+  background: var(--primary-soft);
 }
 
 .combo-list b {
@@ -834,7 +849,7 @@ select.select {
 }
 
 .combo-list .new {
-  color: var(--brick);
+  color: var(--primary);
   font-weight: 600;
   font-size: 13.5px;
 }
@@ -862,14 +877,14 @@ button.chip {
 
 button.chip:hover:not(:disabled) {
   filter: none;
-  border-color: var(--brick);
-  color: var(--brick);
+  border-color: var(--primary);
+  color: var(--primary);
 }
 
 button.chip[aria-pressed="true"] {
-  background: var(--brick);
-  border-color: var(--brick);
-  color: #fff;
+  background: var(--primary);
+  border-color: var(--primary);
+  color: var(--on-primary);
   font-weight: 600;
 }
 
@@ -1013,8 +1028,8 @@ button.chip[aria-pressed="true"] {
 
 .daynav button:hover:not(:disabled) {
   filter: none;
-  background: var(--brick-soft);
-  color: var(--brick);
+  background: var(--primary-soft);
+  color: var(--primary);
 }
 
 .daynav .today {
@@ -1209,7 +1224,7 @@ kbd {
   border-radius: 7px;
   gap: 5px;
   font-size: 12.5px;
-  color: var(--brick);
+  color: var(--primary);
   opacity: 0;
 }
 
@@ -1217,7 +1232,7 @@ kbd {
 .slot button:focus-visible {
   filter: none;
   opacity: 1;
-  background: var(--brick-soft);
+  background: var(--primary-soft);
   outline-offset: -2px;
 }
 
@@ -1286,12 +1301,12 @@ button.appt.short {
 }
 
 .appt.confirmado {
-  border-color: var(--brick);
-  background: color-mix(in srgb, var(--brick-soft) 60%, var(--surface));
+  border-color: var(--primary);
+  background: color-mix(in srgb, var(--primary-soft) 60%, var(--surface));
 }
 
 .appt.confirmado .t {
-  color: var(--brick);
+  color: var(--primary);
 }
 
 .appt.completado {
@@ -1334,7 +1349,7 @@ button.appt.short {
   left: 0;
   right: 0;
   height: 0;
-  border-top: 2px solid var(--brick);
+  border-top: 2px solid var(--primary);
   z-index: 3;
   pointer-events: none;
 }
@@ -1347,7 +1362,7 @@ button.appt.short {
   width: 8px;
   height: 8px;
   border-radius: 50%;
-  background: var(--brick);
+  background: var(--primary);
 }
 
 .nowlabel {
@@ -1355,8 +1370,8 @@ button.appt.short {
   right: 4px;
   z-index: 8;
   transform: translateY(-50%);
-  background: var(--brick);
-  color: #fff;
+  background: var(--primary);
+  color: var(--on-primary);
   font-size: 11px;
   font-weight: 700;
   padding: 1px 6px;
@@ -1507,7 +1522,7 @@ button.appt.short {
   width: 8px;
   height: 8px;
   border-radius: 50%;
-  background: var(--brick);
+  background: var(--primary);
   position: relative;
 }
 
@@ -1516,7 +1531,7 @@ button.appt.short {
   position: absolute;
   inset: -4px;
   border-radius: 50%;
-  border: 1px solid var(--brick);
+  border: 1px solid var(--primary);
   opacity: 0.4;
 }
 
@@ -1565,7 +1580,7 @@ button.appt.short {
 
 .bar-mini {
   height: 5px;
-  background: var(--brick-soft);
+  background: var(--primary-soft);
   border-radius: 99px;
   overflow: hidden;
 }
@@ -1573,7 +1588,7 @@ button.appt.short {
 .bar-mini i {
   display: block;
   height: 100%;
-  background: var(--brick);
+  background: var(--primary);
   border-radius: 99px;
 }
 
@@ -1605,8 +1620,8 @@ button.appt.short {
 
 .next .in {
   margin-left: auto;
-  background: var(--brick-soft);
-  color: var(--brick);
+  background: var(--primary-soft);
+  color: var(--primary);
   font-weight: 700;
   font-size: 13px;
   padding: 5px 11px;
@@ -1745,15 +1760,15 @@ button.kpi:hover:not(:disabled) {
 .nowline i {
   flex: 1;
   height: 2px;
-  background: var(--brick);
+  background: var(--primary);
   border-radius: 2px;
 }
 
 .nowline span {
-  color: var(--brick);
+  color: var(--primary);
   font-size: 11.5px;
   font-weight: 700;
-  background: var(--brick-soft);
+  background: var(--primary-soft);
   padding: 1px 7px;
   border-radius: 99px;
 }
@@ -1774,7 +1789,7 @@ button.showpast {
   border-radius: 0;
   background: none;
   padding: 9px 18px;
-  color: var(--brick);
+  color: var(--primary);
   font-size: 13px;
 }
 
@@ -2034,9 +2049,9 @@ button.showpast:hover:not(:disabled) {
 }
 
 .search input:focus {
-  outline: 2px solid var(--brick);
+  outline: 2px solid var(--primary);
   outline-offset: -1px;
-  border-color: var(--brick);
+  border-color: var(--primary);
 }
 
 .chips {
@@ -2260,7 +2275,7 @@ button.rowlink:hover:not(:disabled) {
 .menu button:hover:not(:disabled),
 .menu button:focus-visible {
   filter: none;
-  background: var(--brick-soft);
+  background: var(--primary-soft);
 }
 
 .menu button svg {
@@ -2269,7 +2284,7 @@ button.rowlink:hover:not(:disabled) {
 }
 
 .menu button:hover svg {
-  stroke: var(--brick);
+  stroke: var(--primary);
 }
 
 .menu hr {
@@ -2293,14 +2308,14 @@ button.rowlink:hover:not(:disabled) {
   width: 42px;
   height: 42px;
   border-radius: 12px;
-  background: var(--brick-soft);
+  background: var(--primary-soft);
   margin: 0 auto 12px;
 }
 
 .table-empty .sq svg {
   width: 20px;
   height: 20px;
-  stroke: var(--brick);
+  stroke: var(--primary);
   stroke-width: 1.8;
   fill: none;
 }
@@ -2385,9 +2400,9 @@ button.link:hover:not(:disabled) {
 }
 
 .field textarea:focus {
-  outline: 2px solid var(--brick);
+  outline: 2px solid var(--primary);
   outline-offset: -1px;
-  border-color: var(--brick);
+  border-color: var(--primary);
 }
 
 .field-row {
@@ -2410,9 +2425,9 @@ button.link:hover:not(:disabled) {
 }
 
 .input-affix:focus-within {
-  outline: 2px solid var(--brick);
+  outline: 2px solid var(--primary);
   outline-offset: -1px;
-  border-color: var(--brick);
+  border-color: var(--primary);
 }
 
 .field .input-affix input {
@@ -2463,7 +2478,7 @@ button.link:hover:not(:disabled) {
 .checklist input {
   width: 16px;
   height: 16px;
-  accent-color: var(--brick);
+  accent-color: var(--primary);
 }
 
 .checklist .sq {
@@ -2515,7 +2530,7 @@ button.link:hover:not(:disabled) {
 .switch input {
   width: 16px;
   height: 16px;
-  accent-color: var(--brick);
+  accent-color: var(--primary);
 }
 
 .week .times {
@@ -2716,13 +2731,13 @@ a.button.secondary:hover {
 
 .presets button:hover:not(:disabled) {
   filter: none;
-  background: var(--brick-soft);
-  color: var(--brick);
+  background: var(--primary-soft);
+  color: var(--primary);
 }
 
 .presets button[aria-pressed="true"] {
-  background: var(--brick);
-  color: #fff;
+  background: var(--primary);
+  color: var(--on-primary);
   font-weight: 600;
 }
 
@@ -2815,7 +2830,7 @@ a.button.secondary:hover {
 }
 
 .sw input:focus-visible + i {
-  outline: 2px solid var(--brick);
+  outline: 2px solid var(--primary);
   outline-offset: 2px;
 }
 
@@ -2891,8 +2906,8 @@ button.q {
 
 button.q:hover:not(:disabled) {
   filter: none;
-  border-color: var(--brick);
-  color: var(--brick);
+  border-color: var(--primary);
+  color: var(--primary);
 }
 
 .help-pop {
@@ -3112,7 +3127,7 @@ tr.total td {
   max-width: 24px;
   min-height: 3px;
   border-radius: 4px 4px 0 0;
-  background: var(--brick);
+  background: var(--primary);
   transition: filter 0.1s;
 }
 
@@ -3121,11 +3136,11 @@ tr.total td {
 }
 
 .hours .b {
-  background: color-mix(in srgb, var(--brick) 35%, var(--surface));
+  background: color-mix(in srgb, var(--primary) 35%, var(--surface));
 }
 
 .hours .h.peak .b {
-  background: var(--brick);
+  background: var(--primary);
 }
 
 .daychart .dcol:hover .b,
@@ -3222,7 +3237,7 @@ tr.total td {
 .brow .track i {
   display: block;
   height: 100%;
-  background: var(--brick);
+  background: var(--primary);
   border-radius: 0 4px 4px 0;
 }
 
@@ -3400,13 +3415,13 @@ tr.total td {
 }
 
 .subnav a:hover {
-  background: var(--brick-soft);
-  color: var(--brick);
+  background: var(--primary-soft);
+  color: var(--primary);
 }
 
 .subnav a[aria-current] {
   background: var(--surface);
-  border-left-color: var(--brick);
+  border-left-color: var(--primary);
   color: var(--ink);
   font-weight: 600;
 }
@@ -3630,7 +3645,7 @@ tr.total td {
 
   .subnav a[aria-current] {
     border-left: 0;
-    border-bottom-color: var(--brick);
+    border-bottom-color: var(--primary);
   }
 }
 
@@ -3813,8 +3828,8 @@ tr.total td {
 
 .chat-bubble.user {
   align-self: flex-end;
-  background: var(--brick);
-  color: #fff;
+  background: var(--primary);
+  color: var(--on-primary);
 }
 
 .chat-bubble.assistant {

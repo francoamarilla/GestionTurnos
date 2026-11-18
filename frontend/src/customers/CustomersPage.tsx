@@ -576,7 +576,7 @@ export default function CustomersPage() {
                               <button type="button" className="rowlink" onClick={open}>
                                 {customerLabel(customer)}
                               </button>
-                              {customer.visits >= LOYAL_VISITS && <Badge variant="brick">Fiel</Badge>}
+                              {customer.visits >= LOYAL_VISITS && <Badge variant="primary">Fiel</Badge>}
                               {!customer.active && <Badge variant="slate">Inactivo</Badge>}
                             </>
                           }
