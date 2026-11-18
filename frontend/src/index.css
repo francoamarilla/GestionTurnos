@@ -360,23 +360,34 @@ button.icon svg {
   letter-spacing: -0.02em;
 }
 
-.sidebar-mark {
-  width: 26px;
-  height: 26px;
-  border-radius: 7px;
-  background: var(--primary);
-  display: grid;
-  place-items: center;
-  flex: none;
+/* Recepta logo (components/BrandLogo.tsx). Fixed height, width from the
+   asset's own ratio: never stretched, recolored or shadowed. */
+.brand-logo {
+  display: block;
+  height: 30px;
+  width: auto;
 }
 
-.sidebar-mark svg {
-  width: 15px;
-  height: 15px;
-  stroke: var(--on-primary);
-  stroke-width: 2;
-  stroke-linecap: round;
-  fill: none;
+.brand-mark {
+  display: none;
+  height: 28px;
+  width: auto;
+}
+
+/* img + attribute: must outrank the narrow-sidebar rule that shows the mark. */
+[data-theme="dark"] img.theme-light,
+:root:not([data-theme="dark"]) img.theme-dark {
+  display: none;
+}
+
+.login-brand {
+  display: flex;
+  justify-content: center;
+  padding: 6px 0 14px;
+}
+
+.login-brand .brand-logo {
+  height: 40px;
 }
 
 .nav-group {
@@ -646,11 +657,16 @@ tr.off {
     overflow-y: hidden;
   }
 
-  .sidebar-brand span,
+  .sidebar-brand .brand-logo,
   .nav-group-label,
   .sidebar-user,
   .sidebar a svg {
     display: none;
+  }
+
+  /* Collapsed into the top bar: the isotype alone. */
+  .sidebar-brand .brand-mark {
+    display: block;
   }
 
   .nav-group {

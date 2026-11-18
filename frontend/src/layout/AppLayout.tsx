@@ -2,6 +2,7 @@ import type { ReactNode } from "react";
 import { NavLink, Outlet } from "react-router-dom";
 import { useAuth } from "../auth/AuthContext";
 import { ToastProvider } from "../components/Toast";
+import { BrandLogo } from "../components/BrandLogo";
 
 // Icon paths copied from the mockups' sidebar (Mockups/*.html).
 function Icon({ children }: { children: ReactNode }) {
@@ -106,14 +107,7 @@ export function AppLayout() {
     <div className="app-shell">
       <nav className="sidebar" aria-label="Principal">
         <div className="sidebar-brand">
-          <div className="sidebar-mark">
-            <svg viewBox="0 0 24 24" aria-hidden="true">
-              <circle cx="6" cy="6" r="3" />
-              <circle cx="6" cy="18" r="3" />
-              <path d="M8.1 7.9 20 18M8.1 16.1 20 6" />
-            </svg>
-          </div>
-          <span>Turnos</span>
+          <BrandLogo withMark />
         </div>
         {navGroups.map((group) => (
           <div key={group.label} className="nav-group">

@@ -2,6 +2,7 @@ import { useForm } from "react-hook-form";
 import { useLocation, useNavigate } from "react-router-dom";
 import { ApiError } from "../api/client";
 import { useAuth } from "./AuthContext";
+import { BrandLogo } from "../components/BrandLogo";
 
 interface LoginFormValues {
   email: string;
@@ -41,6 +42,9 @@ export default function LoginPage() {
   return (
     <div className="centered-page">
       <form className="card" onSubmit={handleSubmit(onSubmit)} noValidate>
+        <div className="login-brand">
+          <BrandLogo />
+        </div>
         <h1>Iniciar sesión</h1>
 
         {DEMO_EMAIL && DEMO_PASSWORD && (
