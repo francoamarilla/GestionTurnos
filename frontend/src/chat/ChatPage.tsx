@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useParams } from "react-router-dom";
 import { api } from "../api/client";
+import { wakeAi } from "./wakeAi";
 import { ChatThread, type ChatReply, type HistoryMessage } from "./ChatThread";
 
 // Public customer chat with the business's assistant (no login). The
@@ -66,6 +67,7 @@ function TenantChat({ tenantId }: { tenantId: string }) {
   const captchaRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
+    wakeAi();
     api.get<ChatInfo>(`/public/${tenantId}/chat/info`).then(setInfo, () => setInfo(null));
   }, [tenantId]);
 

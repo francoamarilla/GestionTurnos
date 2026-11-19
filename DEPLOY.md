@@ -207,6 +207,7 @@ conversación de reserva cuesta centavos o menos.
 | `VITE_DEMO_EMAIL` | no | Email que muestra el cartel del login. Sin definir, no hay cartel |
 | `VITE_DEMO_PASSWORD` | no | Contraseña que muestra ese cartel |
 | `VITE_TURNSTILE_SITE_KEY` | no | Site key de Turnstile para el chat público |
+| `VITE_AI_WAKE_URL` | no | `https://turnos-ai-xxxx.onrender.com/health`. El chat lo llama al abrirse para despertar a `turnos-ai` (en Render free, un pedido desde el backend recibe 429 y no lo despierta) |
 
 ---
 

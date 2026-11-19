@@ -4,7 +4,6 @@ import java.math.BigDecimal;
 import java.time.Duration;
 import java.util.List;
 import java.util.UUID;
-import java.util.concurrent.atomic.AtomicLong;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.client.SimpleClientHttpRequestFactory;
 import org.springframework.stereotype.Component;
@@ -17,7 +16,6 @@ import org.springframework.web.client.RestClient;
 public class AiServiceClient {
 
     private final RestClient restClient;
-    private final AtomicLong lastWarmUp = new AtomicLong();
 
     public AiServiceClient(
             @Value("${app.ai.base-url:}") String baseUrl,
@@ -39,25 +37,6 @@ public class AiServiceClient {
 
     public boolean enabled() {
         return restClient != null;
-    }
-
-    // On free hosting ai-service sleeps when idle and takes ~20-60 s to wake,
-    // longer than a turn can wait, so the first message fell back to buttons.
-    // Called when a chat opens: the customer types while the service wakes.
-    // Fire-and-forget, at most once a minute however many chats open.
-    public void warmUp() {
-        long now = System.currentTimeMillis();
-        long last = lastWarmUp.get();
-        if (restClient == null || now - last < 60_000 || !lastWarmUp.compareAndSet(last, now)) {
-            return;
-        }
-        Thread.startVirtualThread(() -> {
-            try {
-                restClient.get().uri("/health").retrieve().toBodilessEntity();
-            } catch (RuntimeException ignored) {
-                // Best effort: the real turn reports any failure.
-            }
-        });
     }
 
     public TurnResponse turn(TurnRequest request) {
