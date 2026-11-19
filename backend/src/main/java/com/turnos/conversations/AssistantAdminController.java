@@ -10,6 +10,7 @@ import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Size;
 import java.util.List;
 import java.util.UUID;
+import org.springframework.http.HttpStatus;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -19,6 +20,7 @@ import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
+import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RestController;
 
 // The owner's "Asistente" screen: configuration (versioned), the playground,
@@ -30,14 +32,17 @@ public class AssistantAdminController {
     private final AssistantConfigService configService;
     private final ConversationService conversationService;
     private final AssistantInsightsService insightsService;
+    private final AiServiceClient aiServiceClient;
 
     public AssistantAdminController(
             AssistantConfigService configService,
             ConversationService conversationService,
-            AssistantInsightsService insightsService) {
+            AssistantInsightsService insightsService,
+            AiServiceClient aiServiceClient) {
         this.configService = configService;
         this.conversationService = conversationService;
         this.insightsService = insightsService;
+        this.aiServiceClient = aiServiceClient;
     }
 
     @GetMapping("/config")
@@ -59,6 +64,14 @@ public class AssistantAdminController {
     @PostMapping("/config/publish")
     public AssistantConfigResponse publish(@AuthenticationPrincipal AuthenticatedPrincipal admin) {
         return configService.publish(admin.tenantId());
+    }
+
+    // The dashboard's chat button calls this on load, so the AI service is
+    // awake by the time the owner opens the chat. See AiServiceClient.warmUp.
+    @PostMapping("/warmup")
+    @ResponseStatus(HttpStatus.NO_CONTENT)
+    public void warmUp() {
+        aiServiceClient.warmUp();
     }
 
     // Same pipeline as the public chat, on the draft config, never writing

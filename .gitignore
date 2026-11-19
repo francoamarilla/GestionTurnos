@@ -53,3 +53,5 @@ Mockups/
 
 # Local backlog of backend endpoints the mockups need
 ENDPOINTS-PENDIENTES.md
+.neon
+node_modules/

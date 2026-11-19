@@ -25,20 +25,25 @@ public class PublicChatController {
     private final PublicChatService publicChatService;
     private final ChatRateLimiter rateLimiter;
     private final TurnstileVerifier turnstileVerifier;
+    private final AiServiceClient aiServiceClient;
 
     public PublicChatController(
             ConversationService conversationService,
             PublicChatService publicChatService,
             ChatRateLimiter rateLimiter,
-            TurnstileVerifier turnstileVerifier) {
+            TurnstileVerifier turnstileVerifier,
+            AiServiceClient aiServiceClient) {
         this.conversationService = conversationService;
         this.publicChatService = publicChatService;
         this.rateLimiter = rateLimiter;
         this.turnstileVerifier = turnstileVerifier;
+        this.aiServiceClient = aiServiceClient;
     }
 
     @GetMapping("/api/public/{tenantId}/chat/info")
     public PublicChatService.ChatInfo info(@PathVariable UUID tenantId) {
+        // The widget loads this when the chat opens.
+        aiServiceClient.warmUp();
         return publicChatService.info(tenantId, turnstileVerifier.enabled());
     }
 

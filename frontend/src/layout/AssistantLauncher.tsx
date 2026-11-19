@@ -17,6 +17,12 @@ export function AssistantLauncher({ businessName }: { businessName: string }) {
   const buttonRef = useRef<HTMLButtonElement>(null);
   const opened = useRef(false);
 
+  // Wakes the AI service (it sleeps on free hosting) while the owner is still
+  // looking at the dashboard, so the first chat message doesn't time out.
+  useEffect(() => {
+    api.post("/assistant/warmup").catch(() => {});
+  }, []);
+
   // The button disappears when the chat opens, so focus has to move: into
   // the message field on open, back to the button on close.
   useEffect(() => {
