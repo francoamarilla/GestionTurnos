@@ -186,6 +186,24 @@ public class DemoDataService {
         execute("DELETE FROM tenant WHERE id IN (:ids)", tenantIds);
     }
 
+    // Fixed ids, so every reset (each Render free boot reseeds) rebuilds the
+    // same tenant and admin: a JWT from before the reset, an open /chat page
+    // or a /chat/<id> link keeps working instead of answering 404.
+    static final UUID DEMO_TENANT_ID = UUID.fromString("0de70000-0000-4000-8000-000000000001");
+    static final UUID DEMO_ADMIN_ID = UUID.fromString("0de70000-0000-4000-8000-000000000002");
+
+    // ponytail: the ids are generated, so re-key the row right after insert,
+    // before anything references it, and reload it under the fixed id.
+    private <T> T pinId(T entity, java.util.function.Function<T, UUID> id, String table, UUID fixed, Class<T> type) {
+        UUID generated = id.apply(entity);
+        entityManager.detach(entity);
+        entityManager.createNativeQuery("UPDATE " + table + " SET id = :fixed WHERE id = :generated")
+                .setParameter("fixed", fixed)
+                .setParameter("generated", generated)
+                .executeUpdate();
+        return entityManager.find(type, fixed);
+    }
+
     private void execute(String sql, List<UUID> tenantIds) {
         entityManager.createNativeQuery(sql).setParameter("ids", tenantIds).executeUpdate();
     }
@@ -200,6 +218,7 @@ public class DemoDataService {
         tenant.setTimezone(ZONE.getId());
         tenant.setAddress("Av. Siempreviva 742, CABA");
         tenant = tenantRepository.saveAndFlush(tenant);
+        tenant = pinId(tenant, Tenant::getId, "tenant", DEMO_TENANT_ID, Tenant.class);
 
         Branch branch = new Branch();
         branch.setTenantId(tenant.getId());
@@ -213,6 +232,7 @@ public class DemoDataService {
         admin.setRole(AdminRole.ADMIN);
         admin.setActive(true);
         admin = adminUserRepository.saveAndFlush(admin);
+        admin = pinId(admin, AdminUser::getId, "admin_user", DEMO_ADMIN_ID, AdminUser.class);
 
         // Split day, Monday to Saturday - also what makes the week editor in
         // Configuración worth looking at.

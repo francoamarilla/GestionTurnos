@@ -1,7 +1,6 @@
 package com.turnos.demo;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertNotEquals;
 
 import com.turnos.AbstractIntegrationTest;
 import java.sql.Connection;
@@ -58,7 +57,10 @@ class DemoResetWithAssistantDataTest extends AbstractIntegrationTest {
 
         demoDataService.reset();
 
-        assertNotEquals(first, demoDataService.demoTenantId());
+        // Same id after a reset: logged-in sessions and open chats survive it.
+        assertEquals(first, demoDataService.demoTenantId());
+        assertEquals(DemoDataService.DEMO_TENANT_ID, first);
+        assertEquals(1, count("SELECT count(*) FROM admin_user WHERE id = '" + DemoDataService.DEMO_ADMIN_ID + "'"));
         assertEquals(0, count("SELECT count(*) FROM conversation WHERE tenant_id = '" + first + "'"));
     }
 
